@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>flying-notifier · 动态体验</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, "PingFang SC", sans-serif;
+    color: #fff;
+    overflow: hidden;
+    /* 仿桌面壁纸 */
+    background: radial-gradient(120% 120% at 20% 0%, #3a6db5 0%, #24417a 45%, #16244a 100%);
+  }
+  /* 仿菜单栏，营造"盖在应用之上"的观感 */
+  .menubar {
+    height: 26px; display: flex; align-items: center; gap: 16px;
+    padding: 0 14px; font-size: 13px;
+    background: rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .menubar .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .menubar b { font-weight: 700; }
+  .hint {
+    position: absolute; left: 50%; top: 46%; transform: translateX(-50%);
+    text-align: center; opacity: .55; font-size: 13px; pointer-events: none;
+  }
+
+  #stage { position: absolute; inset: 26px 0 64px 0; overflow: hidden; }
+
+  .flight {
+    position: absolute; top: 16%; left: 0;
+    display: flex; align-items: center; white-space: nowrap;
+    will-change: transform;
+    filter: drop-shadow(0 3px 7px rgba(0,0,0,.35));
+  }
+  .logo { width: 28px; height: 28px; margin-right: 6px; border-radius: 8px; object-fit: contain; flex: 0 0 auto; }
+  .banner {
+    display: flex; flex-direction: column; justify-content: center;
+    min-width: 120px; max-width: 260px; padding: 7px 11px; border-radius: 8px;
+    color: #fff; background: linear-gradient(135deg, #555, #333);
+    border: 1.5px solid rgba(255,255,255,.85);
+  }
+  .b-title { font-size: 13px; font-weight: 800; letter-spacing: .3px; }
+  .b-msg { font-size: 12px; font-weight: 500; opacity: .92; margin-top: 2px; }
+  .rope { width: 6px; height: 2px; background: rgba(255,255,255,.85); margin: 0 -1px; }
+  .plane { font-size: 32px; line-height: 1; }
+  .p-claude { transform: rotate(45deg); }
+  .p-codex  { transform: rotate(35deg); }
+  .p-feishu { transform: scaleX(-1); }
+  .t-auth    { background: linear-gradient(135deg, #ff5a5a, #c0392b); }
+  .t-confirm { background: linear-gradient(135deg, #ff9f43, #e67e22); }
+  .t-stuck   { background: linear-gradient(135deg, #ffd23f, #f1b000); color: #3a2e00; }
+  .t-done    { background: linear-gradient(135deg, #2ecc71, #1e9e57); }
+  .t-stuck .rope { background: rgba(80,60,0,.7); }
+
+  .controls {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 64px;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
+    padding: 0 12px;
+    background: rgba(0,0,0,.28); backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255,255,255,.1);
+  }
+  .controls button {
+    font: 600 13px -apple-system, "PingFang SC", sans-serif;
+    color: #fff; border: 1px solid rgba(255,255,255,.28);
+    background: rgba(255,255,255,.12); padding: 7px 12px; border-radius: 999px;
+    cursor: pointer; transition: transform .08s, background .15s;
+  }
+  .controls button:hover { background: rgba(255,255,255,.22); transform: translateY(-1px); }
+  .controls button:active { transform: translateY(0); }
+</style>
+</head>
+<body>
+  <div class="menubar">
+    <span class="dot" style="background:#ff5f57"></span>
+    <span class="dot" style="background:#febc2e"></span>
+    <span class="dot" style="background:#28c840"></span>
+    <b>你的桌面</b>
+    <span style="opacity:.7">无论在用什么 App，飞机都在最上层</span>
+  </div>
+
+  <div id="stage"></div>
+  <div class="hint">点下面的按钮，发射一架通知飞机 →<br>飞机停在右侧后，把光标移上去再移开，它才会飞走</div>
+
+  <div class="controls">
+    <button data-s="claude" data-t="auth"    data-m="沈阳客运 · Claude 需要授权运行 Bash">Claude 需授权</button>
+    <button data-s="claude" data-t="done"    data-m="FS Agent · 任务已完成">Claude 已完成</button>
+    <button data-s="feishu" data-t="confirm" data-m="数字人沟通群 · 评审会即将开始">飞书 会议提醒</button>
+    <button data-s="codex"  data-t="stuck"   data-m="codex · 等待你的输入已 60s">codex 卡住</button>
+    <button data-s="codex"  data-t="done"    data-m="codex · 重构任务已完成">codex 已完成</button>
+    <button id="rand">🎲 随机发射</button>
+  </div>
+
+<script>
+const AIRCRAFT = { claude:'✈️', feishu:'🚁', codex:'🛩️', default:'✈️' };
+const TYPE = {
+  auth:    { cls:'t-auth',    label:'需授权' },
+  confirm: { cls:'t-confirm', label:'需确认' },
+  stuck:   { cls:'t-stuck',   label:'卡住/等待' },
+  done:    { cls:'t-done',    label:'已完成' },
+  default: { cls:'',          label:'通知' },
+};
+const HAS_LOGO = { claude:1, feishu:1, codex:1 };
+const TIMING = { cross:5000, exit:900 };
+
+const stage = document.getElementById('stage');
+const hint = document.querySelector('.hint');
+const queue = [];
+let busy = false, parked = null;
+
+window.addEventListener('mousemove', (e) => {
+  if (!parked) return;
+  const r = parked.rect;
+  const inside = e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+  if (inside) parked.entered = true;
+  else if (parked.entered) { const p = parked; parked = null; p.dismiss(); }
+});
+
+// ---- 合成喷气音效 ----
+let actx = null;
+function ctx(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume(); return actx; }
+function playJet(){
+  const c = ctx(), now = c.currentTime, dur = 2.8;
+  const m = c.createGain(); m.connect(c.destination);
+  m.gain.setValueAtTime(.0001, now);
+  m.gain.exponentialRampToValueAtTime(.5, now+dur*.45);
+  m.gain.exponentialRampToValueAtTime(.28, now+dur*.7);
+  m.gain.exponentialRampToValueAtTime(.0001, now+dur);
+  const len = Math.floor(c.sampleRate*dur), buf = c.createBuffer(1,len,c.sampleRate), d = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+  const n = c.createBufferSource(); n.buffer = buf;
+  const bp = c.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=.9;
+  bp.frequency.setValueAtTime(360,now); bp.frequency.linearRampToValueAtTime(1500,now+dur*.45); bp.frequency.linearRampToValueAtTime(680,now+dur);
+  const ng = c.createGain(); ng.gain.value=.85; n.connect(bp); bp.connect(ng); ng.connect(m);
+  const o = c.createOscillator(); o.type='sawtooth';
+  o.frequency.setValueAtTime(250,now); o.frequency.linearRampToValueAtTime(620,now+dur*.45); o.frequency.linearRampToValueAtTime(350,now+dur);
+  const lp = c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2200;
+  const og = c.createGain(); og.gain.value=.12; o.connect(lp); lp.connect(og); og.connect(m);
+  n.start(now); o.start(now); n.stop(now+dur); o.stop(now+dur);
+}
+
+function enqueue(evt){ hint.style.display='none'; queue.push(evt); pump(); }
+function pump(){ if(busy||!queue.length) return; busy=true; play(queue.shift()).then(()=>{ busy=false; pump(); }); }
+
+function play(evt){
+  return new Promise((resolve)=>{
+    const s = evt.scenario||'default', typ = TYPE[evt.type]||TYPE.default;
+    const msg = evt.message||'', title = evt.title||typ.label;
+    const f = document.createElement('div'); f.className='flight';
+    f.innerHTML = `
+      ${HAS_LOGO[s]?`<img class="logo" src="./logos/${s}.png" alt="">`:''}
+      <div class="banner ${typ.cls}"><div class="b-title"></div>${msg?'<div class="b-msg"></div>':''}</div>
+      <div class="rope"></div>
+      <div class="plane p-${s}">${AIRCRAFT[s]||AIRCRAFT.default}</div>`;
+    f.querySelector('.b-title').textContent = title;
+    if(msg) f.querySelector('.b-msg').textContent = msg;
+    stage.appendChild(f);
+    requestAnimationFrame(()=>{
+      const w = f.offsetWidth, W = stage.clientWidth, restX = W - w;
+      playJet();
+      const enter = f.animate(
+        [{transform:`translateX(${-w}px)`},{transform:`translateX(${restX}px)`}],
+        {duration:TIMING.cross, easing:'cubic-bezier(.22,.61,.36,1)', fill:'forwards'});
+      enter.onfinish = ()=>{
+        const dismiss = ()=>{
+          const ex = f.animate([{transform:`translateX(${restX}px)`},{transform:`translateX(${W}px)`}],
+            {duration:TIMING.exit, easing:'cubic-bezier(.5,0,.75,0)', fill:'forwards'});
+          ex.onfinish = ()=>{ f.remove(); resolve(); };
+        };
+        parked = { rect: f.getBoundingClientRect(), entered:false, dismiss };
+      };
+    });
+  });
+}
+
+document.querySelectorAll('.controls button[data-s]').forEach(b=>{
+  b.addEventListener('click', ()=> enqueue({scenario:b.dataset.s, type:b.dataset.t, message:b.dataset.m}));
+});
+const ALL = [...document.querySelectorAll('.controls button[data-s]')];
+document.getElementById('rand').addEventListener('click', ()=>{
+  const b = ALL[Math.floor(Math.random()*ALL.length)];
+  enqueue({scenario:b.dataset.s, type:b.dataset.t, message:b.dataset.m});
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  /* 注意：不设 pointer-events:none —— 需要接收（被穿透转发的）鼠标移动以检测悬停；
+     点击穿透由主进程 setIgnoreMouseEvents 在窗口层面保证 */
+}
+
+#stage {
+  position: absolute;
+  inset: 0;
+}
+
+/* 一次飞行 = 横幅 + 牵引绳 + 飞机，作为整体移动 */
+.flight {
+  position: absolute;
+  top: 12%;
+  left: 0;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  will-change: transform;
+  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, 0.35));
+}
+
+/* 场景 LOGO：放在横幅框左侧外 */
+.logo {
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+  border-radius: 8px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.banner {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 120px;
+  max-width: 260px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(135deg, #555, #333);
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+}
+
+.banner .b-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  font-family: -apple-system, "PingFang SC", sans-serif;
+}
+
+.banner .b-msg {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.92;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: -apple-system, "PingFang SC", sans-serif;
+}
+
+/* 牵引绳：短，几乎挨着飞机 */
+.rope {
+  width: 6px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  margin: 0 -1px;
+}
+
+.plane {
+  font-size: 32px;
+  line-height: 1;
+}
+
+/* 自绘 SVG 机型（朝向已固定，机头朝右） */
+.plane-img {
+  width: 55px;
+  height: auto;
+  flex: 0 0 auto;
+}
+
+/* emoji 机型默认朝向不同，分别校正机头朝右（角度经截图实测） */
+.plane.p-claude { transform: rotate(45deg); }   /* ✈️ 0°朝右上 → 转正朝右 */
+.plane.p-codex  { transform: rotate(35deg); }   /* 🛩️ 0°朝右上偏陡 → 转正朝右 */
+.plane.p-feishu { transform: scaleX(-1); }      /* 🚁 默认朝左 → 水平翻转朝右 */
+
+/* 类型配色（同场景内不同样式） */
+.banner.t-auth   { background: linear-gradient(135deg, #ff5a5a, #c0392b); }
+.banner.t-confirm{ background: linear-gradient(135deg, #ff9f43, #e67e22); }
+.banner.t-stuck  { background: linear-gradient(135deg, #ffd23f, #f1b000); color: #3a2e00; }
+.banner.t-done   { background: linear-gradient(135deg, #2ecc71, #1e9e57); }
+.banner.t-stuck .rope { background: rgba(80, 60, 0, 0.7); }
