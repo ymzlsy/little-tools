@@ -1,37 +1,47 @@
-// 副屏飞行层：飞机 + LOGO 沿不规则路径转几圈飞过，带飞机云拖尾，无横幅。
-const AIRCRAFT = { claude: '✈️', feishu: '🚁', codex: '🛩️', default: '✈️' };
+// 副屏飞行层：超大飞机沿平滑样条路径(小角度转弯)缓缓飞过，用软绳拖着 LOGO，
+// 拖一条长长的橙色半透明飞机云，无横幅。
+const AIRCRAFT = { claude: '✈️', feishu: '🚁', codex: '🛩️', idle: '✈️', default: '✈️' };
 const HAS_LOGO = { claude: 1, feishu: 1, codex: 1 };
-// 各 emoji 默认朝向不同，offset-rotate 在切线基础上加这个角度让机头朝前
-const ROT_BASE = { claude: ' 45deg', codex: ' 35deg', feishu: '', default: ' 45deg' };
+const ROT_BASE = { claude: ' 45deg', codex: ' 35deg', feishu: '', idle: ' 45deg', default: ' 45deg' };
+
+const DUR = 13000;     // 飞行时长
+const ROPE_LEN = 240;  // 飞机到被拖物的绳长（横幅更长）
+const PUFF_MS = 75;    // 撒云间隔
+const SVGNS = 'http://www.w3.org/2000/svg';
 
 const stage = document.getElementById('stage');
 let active = 0;
 
-// 生成横跨屏幕、含 2 个回环的不规则路径
+// 平滑样条路径（Catmull-Rom→Bezier，切线连续，无急转）；纵向限步长 → 小角度转弯
 function buildPath(W, H) {
-  const N = 4;
-  const xs = [], ys = [];
+  const N = 7;
+  const pts = [];
+  let y = H * (0.3 + Math.random() * 0.4);
   for (let i = 0; i <= N; i++) {
-    xs.push(Math.round(-0.12 * W + 1.24 * W * (i / N)));
-    ys.push(Math.round(H * (0.28 + Math.random() * 0.44)));
+    const x = -0.08 * W + 1.16 * W * (i / N);
+    pts.push([x, y]);
+    y += (Math.random() - 0.5) * 0.42 * H;            // 每步纵向变化有限 → 缓坡
+    y = Math.max(H * 0.14, Math.min(H * 0.86, y));     // 限制在屏幕范围内
   }
-  let d = `M ${xs[0]} ${ys[0]}`;
-  const r = Math.round(H * 0.09); // 回环半径
-  for (let i = 1; i <= N; i++) {
-    const cx = Math.round((xs[i - 1] + xs[i]) / 2);
-    d += ` C ${cx} ${ys[i - 1]}, ${cx} ${ys[i]}, ${xs[i]} ${ys[i]}`;
-    if (i === 2 || i === 3) {
-      const dir = i === 2 ? 1 : 0; // 两个环方向相反，更"乱"
-      d += ` a ${r} ${r} 0 1 ${dir} 0 ${2 * r} a ${r} ${r} 0 1 ${dir} 0 ${-2 * r}`;
-    }
+  let d = `M ${pts[0][0].toFixed(0)} ${pts[0][1].toFixed(0)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || pts[i + 1];
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${c1x.toFixed(0)} ${c1y.toFixed(0)}, ${c2x.toFixed(0)} ${c2y.toFixed(0)}, ${p2[0].toFixed(0)} ${p2[1].toFixed(0)}`;
   }
   return d;
+}
+
+function center(el) {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
 function spawnPuff(x, y) {
   const p = document.createElement('div');
   p.className = 'puff';
-  const s = 14 + Math.random() * 16;
+  const s = 28 + Math.random() * 34;
   p.style.width = s + 'px';
   p.style.height = s + 'px';
   p.style.left = x + 'px';
@@ -46,7 +56,6 @@ function fly(evt) {
   const plane = AIRCRAFT[s] || AIRCRAFT.default;
   const W = window.innerWidth, H = window.innerHeight;
   const d = buildPath(W, H);
-  const DUR = 6500;
 
   const planeEl = document.createElement('div');
   planeEl.className = 'sec-plane';
@@ -55,43 +64,66 @@ function fly(evt) {
   planeEl.style.offsetRotate = 'auto' + (ROT_BASE[s] || ROT_BASE.default);
   stage.appendChild(planeEl);
 
-  let logoEl = null;
-  if (HAS_LOGO[s]) {
-    logoEl = document.createElement('img');
-    logoEl.className = 'sec-logo';
-    logoEl.src = `../assets/logos/${s}.png`;
-    logoEl.style.offsetPath = `path('${d}')`;
-    logoEl.style.offsetRotate = '0deg'; // LOGO 始终正立
-    stage.appendChild(logoEl);
+  // 被拖的东西：摸鱼督察拖横幅，普通通知拖 LOGO
+  let towEl = null, ropeSvg = null, ropePath = null;
+  let ropeLen = ROPE_LEN;
+  if (evt.banner) {
+    towEl = document.createElement('div');
+    towEl.className = 'sec-banner';
+    towEl.textContent = evt.banner;
+    ropeLen = 340; // 横幅大，绳子放长免得压到机身
+    stage.appendChild(towEl);
+  } else if (HAS_LOGO[s]) {
+    towEl = document.createElement('img');
+    towEl.className = 'sec-logo';
+    towEl.src = `../assets/logos/${s}.png`;
+    stage.appendChild(towEl);
+  }
+  if (towEl) {
+    ropeSvg = document.createElementNS(SVGNS, 'svg');
+    ropeSvg.setAttribute('class', 'sec-rope-svg');
+    ropeSvg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    ropeSvg.setAttribute('preserveAspectRatio', 'none');
+    ropePath = document.createElementNS(SVGNS, 'path');
+    ropePath.setAttribute('class', 'sec-rope-path');
+    ropeSvg.appendChild(ropePath);
+    stage.appendChild(ropeSvg);
   }
 
   const pAnim = planeEl.animate(
     [{ offsetDistance: '0%' }, { offsetDistance: '100%' }],
-    { duration: DUR, easing: 'ease-in-out', fill: 'forwards' }
+    { duration: DUR, easing: 'linear', fill: 'forwards' } // 匀速 → 转弯更顺
   );
-  if (logoEl) {
-    logoEl.animate(
-      [{ offsetDistance: '0%' }, { offsetDistance: '100%' }],
-      { duration: DUR, easing: 'ease-in-out', fill: 'forwards', delay: 200 } // 略滞后，跟在机尾
-    );
-  }
 
-  // 拖尾：周期性在机身位置撒云
-  let spawning = true;
-  function tick() {
-    if (!spawning) return;
-    const r = planeEl.getBoundingClientRect();
-    spawnPuff(r.left + r.width / 2, r.top + r.height / 2);
-    setTimeout(() => requestAnimationFrame(tick), 55);
+  // 每帧：按飞行方向用软绳把 LOGO 挂在机尾；按节奏撒橙色云
+  let running = true, prev = null, lastPuff = 0;
+  function frame(ts) {
+    if (!running) return;
+    const pc = center(planeEl);
+    if (towEl && prev) {
+      let dx = pc.x - prev.x, dy = pc.y - prev.y;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len; dy /= len;
+      const lx = pc.x - dx * ropeLen, ly = pc.y - dy * ropeLen;
+      towEl.style.left = lx + 'px';
+      towEl.style.top = ly + 'px';
+      // 软绳：二次贝塞尔，控制点在中点下方 → 自然下垂
+      const mx = (pc.x + lx) / 2, my = (pc.y + ly) / 2 + ropeLen * 0.32;
+      ropePath.setAttribute('d', `M ${pc.x.toFixed(0)} ${pc.y.toFixed(0)} Q ${mx.toFixed(0)} ${my.toFixed(0)} ${lx.toFixed(0)} ${ly.toFixed(0)}`);
+    }
+    prev = pc;
+    if (ts - lastPuff > PUFF_MS) { lastPuff = ts; spawnPuff(pc.x, pc.y); }
+    requestAnimationFrame(frame);
   }
-  requestAnimationFrame(tick);
+  requestAnimationFrame(frame);
 
   pAnim.onfinish = () => {
-    spawning = false;
+    running = false;
     planeEl.remove();
-    if (logoEl) setTimeout(() => logoEl.remove(), 260);
+    if (ropeSvg) ropeSvg.remove();
+    if (towEl) towEl.remove();
     active = Math.max(0, active - 1);
-    if (active === 0) setTimeout(() => { if (active === 0) window.fn.secIdle(); }, 1400); // 等云散尽再休眠
+    if (active === 0) setTimeout(() => { if (active === 0) window.fn.secIdle(); }, 2800);
   };
 }
 

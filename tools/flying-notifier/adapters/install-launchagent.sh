@@ -20,6 +20,9 @@ fi
 echo "→ 停掉旧实例与旧自启..."
 launchctl unload "$PLIST" 2>/dev/null || true
 pkill -9 -f "flying-notifier-app/node_modules/electron" 2>/dev/null || true
+# 兜底：杀掉任何仍占着事件端口的进程（含早期相对路径起的测试残留）
+PORTPIDS=$(lsof -nP -iTCP:47800 2>/dev/null | grep LISTEN | awk '{print $2}' | sort -u)
+[ -n "$PORTPIDS" ] && kill -9 $PORTPIDS 2>/dev/null || true
 sleep 1
 
 echo "→ 同步运行副本到 $RUN_DIR ..."

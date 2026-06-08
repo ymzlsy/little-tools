@@ -2,6 +2,13 @@ const { app, BrowserWindow, screen, ipcMain, shell } = require('electron');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
+
+// 即时落盘的调试日志（FN_DEBUG=1 时开启；console.log 在 launchd 下被块缓冲不可靠）
+function dbg(...a) {
+  if (!process.env.FN_DEBUG) return;
+  try { fs.appendFileSync('/tmp/fn-main.log', new Date().toISOString() + ' ' + a.join(' ') + '\n'); } catch (e) {}
+}
 
 const PORT = 47800; // 本地事件接口端口
 
@@ -76,6 +83,7 @@ function ensureOverlay() {
 }
 
 function deliverToOverlay(evt) {
+  dbg('SHOW', evt.type, evt.sessionId || '');
   ensureOverlay();
   if (ready && win && !win.isDestroyed()) win.webContents.send('notify', evt);
   else pending.push(evt);
@@ -143,22 +151,59 @@ const schedulers = new Map(); // sessionId -> [timeoutId,...]
 
 function cancelScheduler(sid) {
   const t = schedulers.get(sid);
-  if (t) { t.forEach(clearTimeout); schedulers.delete(sid); console.log('[fn] 取消提醒', sid); }
+  if (t) { t.forEach(clearTimeout); schedulers.delete(sid); dbg('CANCEL', sid); }
 }
 function scheduleDone(evt) {
   const sid = evt.sessionId || `anon-${schedulers.size}-${evt.message || ''}`;
   cancelScheduler(sid); // 同一会话再次完成 → 重置计时
-  const fire = (n) => () => { console.log('[fn] 提醒#' + n, sid); deliverToOverlay(evt); };
+  const fire = (n) => () => { dbg('FIRE#' + n, sid); deliverToOverlay(evt); };
   schedulers.set(sid, [setTimeout(fire(1), REMIND_1_MS), setTimeout(fire(2), REMIND_2_MS)]);
-  console.log('[fn] 已排程已完成提醒', sid, REMIND_1_MS, REMIND_2_MS);
+  dbg('SCHEDULE', sid, REMIND_1_MS, REMIND_2_MS);
 }
 
 // HTTP 收到事件后的路由
 function deliver(evt) {
+  lastActivity = Date.now(); // 任何事件 = 有活动
+  lastNag = 0;
+  dbg('RECV', evt.type, evt.sessionId || '');
   if (evt.type === 'active') { cancelScheduler(evt.sessionId); return; } // 回到会话 → 取消提醒
   if (evt.type === 'done')   { scheduleDone(evt); return; }              // 完成 → 延迟提醒，不立即弹
   deliverToOverlay(evt);                                                 // 需授权/卡住等 → 立即弹
 }
+
+// ---- 摸鱼督察：超过 1 小时无任何活动 → 每 20 分钟在副屏飞一架带横幅来挖苦 ----
+const IDLE_MS = Number(process.env.FN_IDLE_MS) || 60 * 60 * 1000;   // 1 小时
+const NAG_EVERY_MS = Number(process.env.FN_NAG_MS) || 20 * 60 * 1000; // 20 分钟
+let lastActivity = Date.now();
+let lastNag = 0;
+
+const NAG_TEMPLATES = [
+  '🏆「连续摸鱼 {h} 小时」成就解锁',
+  '已 {h} 小时未写一行代码，势头很猛',
+  '恭喜达成今日目标：摸鱼 {h} 小时 ✅',
+  '{h} 小时 0 提交，GitHub 草都枯了',
+  'Claude 在线等你召唤，已苦等 {h} 小时',
+  '划水 {h} 小时，这把人生赢家',
+  '{h} 小时没营业，老板的刀已出鞘',
+  '再不 Coding，飞机都替你尴尬了',
+  '今日 KPI：发呆 {h} 小时，超额完成',
+  '{h} 小时未 Coding，梦想又远了一点',
+];
+function makeNagText() {
+  const h = Math.max(1, Math.floor((Date.now() - lastActivity) / 3600000));
+  const t = NAG_TEMPLATES[Math.floor(Math.random() * NAG_TEMPLATES.length)];
+  return t.replace('{h}', h);
+}
+
+setInterval(() => {
+  const now = Date.now();
+  if (now - lastActivity > IDLE_MS && now - lastNag >= NAG_EVERY_MS) {
+    lastNag = now;
+    const text = makeNagText();
+    dbg('NAG', text);
+    deliverSecondary({ scenario: 'idle', banner: text }); // 仅副屏，带横幅
+  }
+}, Number(process.env.FN_CHECK_MS) || 60 * 1000);
 
 function destroyOverlay() {
   ready = false;
