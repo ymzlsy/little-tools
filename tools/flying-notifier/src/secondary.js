@@ -2,6 +2,13 @@
 // 拖一条长长的橙色半透明飞机云，无横幅。
 const AIRCRAFT = { claude: '✈️', feishu: '🚁', codex: '🛩️', idle: '✈️', default: '✈️' };
 const HAS_LOGO = { claude: 1, feishu: 1, codex: 1 };
+const TYPE = {
+  auth:    { cls: 't-auth',    label: '需授权' },
+  confirm: { cls: 't-confirm', label: '需确认' },
+  stuck:   { cls: 't-stuck',   label: '卡住/等待' },
+  done:    { cls: 't-done',    label: '已完成' },
+  default: { cls: '',          label: '通知' },
+};
 const ROT_BASE = { claude: ' 45deg', codex: ' -55deg', feishu: '', idle: ' 45deg', default: ' 45deg' };
 
 const DUR = 13000;     // 飞行时长
@@ -85,31 +92,31 @@ function fly(evt) {
   if (s === 'feishu') planeEl.style.transform = 'scaleX(-1)'; // 🚁 默认朝左 → 水平翻转使机头朝前
   stage.appendChild(planeEl);
 
-  // 被拖的东西：摸鱼督察拖横幅，普通通知拖 LOGO
-  let towEl = null, ropeSvg = null, ropePath = null;
-  let ropeLen = ROPE_LEN;
+  // 被拖的横幅：三种场景都带横幅（含 LOGO + 任务内容，按类型配色）；摸鱼督察是讽刺横幅
+  let ropeLen = 400;
+  const towEl = document.createElement('div');
+  towEl.className = 'sec-banner';
   if (evt.banner) {
-    towEl = document.createElement('div');
-    towEl.className = 'sec-banner';
+    towEl.classList.add('t-nag');
     towEl.textContent = evt.banner;
-    ropeLen = 460; // 横幅大，绳子放长免得压到机身
-    stage.appendChild(towEl);
-  } else if (HAS_LOGO[s]) {
-    towEl = document.createElement('img');
-    towEl.className = 'sec-logo';
-    towEl.src = `../assets/logos/${s}.png`;
-    stage.appendChild(towEl);
+    ropeLen = 460;
+  } else {
+    const typ = TYPE[evt.type] || TYPE.default;
+    if (typ.cls) towEl.classList.add(typ.cls);
+    const logo = HAS_LOGO[s] ? `<img class="sec-banner-logo" src="../assets/logos/${s}.png" alt="">` : '';
+    towEl.innerHTML = `${logo}<span class="sec-banner-txt"></span>`;
+    towEl.querySelector('.sec-banner-txt').textContent = evt.message || typ.label;
   }
-  if (towEl) {
-    ropeSvg = document.createElementNS(SVGNS, 'svg');
-    ropeSvg.setAttribute('class', 'sec-rope-svg');
-    ropeSvg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    ropeSvg.setAttribute('preserveAspectRatio', 'none');
-    ropePath = document.createElementNS(SVGNS, 'path');
-    ropePath.setAttribute('class', 'sec-rope-path');
-    ropeSvg.appendChild(ropePath);
-    stage.appendChild(ropeSvg);
-  }
+  stage.appendChild(towEl);
+
+  const ropeSvg = document.createElementNS(SVGNS, 'svg');
+  ropeSvg.setAttribute('class', 'sec-rope-svg');
+  ropeSvg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  ropeSvg.setAttribute('preserveAspectRatio', 'none');
+  const ropePath = document.createElementNS(SVGNS, 'path');
+  ropePath.setAttribute('class', 'sec-rope-path');
+  ropeSvg.appendChild(ropePath);
+  stage.appendChild(ropeSvg);
 
   const pAnim = planeEl.animate(
     [{ offsetDistance: '0%' }, { offsetDistance: '100%' }],

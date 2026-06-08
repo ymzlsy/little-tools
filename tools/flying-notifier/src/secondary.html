@@ -18,18 +18,25 @@
     transform: translate(-50%, -50%);
     will-change: top, left;
   }
-  /* 被拖的横幅（摸鱼督察用） */
+  /* 被拖的横幅（三种场景都带；含 LOGO + 任务内容，按类型配色） */
   .sec-banner {
     position: absolute; top: 0; left: 0; z-index: 2;
     transform: translate(-50%, -50%);
-    max-width: 520px; text-align: center; white-space: normal;
-    padding: 16px 26px; border-radius: 18px;
-    font: 800 30px/1.25 -apple-system, "PingFang SC", sans-serif; color: #fff;
-    background: linear-gradient(135deg, #ff8a3d, #e8442b);
+    display: flex; align-items: center; gap: 14px;
+    max-width: 560px; white-space: normal;
+    padding: 14px 24px; border-radius: 18px;
+    font: 800 28px/1.25 -apple-system, "PingFang SC", sans-serif; color: #fff;
+    background: linear-gradient(135deg, #555, #333);
     border: 2px solid rgba(255, 255, 255, 0.9);
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
     will-change: top, left;
   }
+  .sec-banner-logo { width: 52px; height: 52px; border-radius: 14px; object-fit: contain; flex: 0 0 auto; }
+  .sec-banner.t-auth    { background: linear-gradient(135deg, #ff5a5a, #c0392b); }
+  .sec-banner.t-confirm { background: linear-gradient(135deg, #ff9f43, #e67e22); }
+  .sec-banner.t-stuck   { background: linear-gradient(135deg, #ffd23f, #f1b000); color: #3a2e00; }
+  .sec-banner.t-done    { background: linear-gradient(135deg, #2ecc71, #1e9e57); }
+  .sec-banner.t-nag     { background: linear-gradient(135deg, #ff8a3d, #e8442b); }
   /* 软绳：SVG 曲线，自然下垂 */
   .sec-rope-svg {
     position: absolute; inset: 0; z-index: 2; overflow: visible;
