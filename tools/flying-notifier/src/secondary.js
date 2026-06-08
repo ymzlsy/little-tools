@@ -80,6 +80,7 @@ function fly(evt) {
   planeEl.textContent = plane;
   planeEl.style.offsetPath = `path('${d}')`;
   planeEl.style.offsetRotate = 'auto' + (ROT_BASE[s] || ROT_BASE.default);
+  if (s === 'feishu') planeEl.style.transform = 'scaleX(-1)'; // 🚁 默认朝左 → 水平翻转使机头朝前
   stage.appendChild(planeEl);
 
   // 被拖的东西：摸鱼督察拖横幅，普通通知拖 LOGO
