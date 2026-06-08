@@ -88,7 +88,8 @@ function playJet() {
 // 当前停在右侧、等待"悬停再移开"才飞走的飞行
 let parked = null; // { rect, entered, dismiss }
 
-window.addEventListener('mousemove', (e) => {
+// 只在「有飞机停住等你挥手」时才监听鼠标，平时不挂全局监听，省掉整天的空耗
+function onMouseMove(e) {
   if (!parked) return;
   const r = parked.rect;
   const inside =
@@ -97,12 +98,12 @@ window.addEventListener('mousemove', (e) => {
   if (inside) {
     parked.entered = true; // 光标移上去了
   } else if (parked.entered) {
-    // 移上去之后又移开 → 飞走
     const p = parked;
     parked = null;
+    window.removeEventListener('mousemove', onMouseMove);
     p.dismiss();
   }
-});
+}
 
 function enqueue(evt) {
   queue.push(evt);
@@ -110,7 +111,12 @@ function enqueue(evt) {
 }
 
 function pump() {
-  if (busy || queue.length === 0) return;
+  if (busy) return;
+  if (queue.length === 0) {
+    // 队列清空且无飞机停留 → 通知主进程销毁窗口，回到休眠
+    if (!parked) window.fn.setIdle();
+    return;
+  }
   busy = true;
   play(queue.shift()).then(() => {
     busy = false;
@@ -180,6 +186,7 @@ function play(evt) {
           };
         };
         parked = { rect: flight.getBoundingClientRect(), entered: false, dismiss };
+        window.addEventListener('mousemove', onMouseMove); // 仅停留期间监听鼠标
       };
     });
   });

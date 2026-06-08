@@ -1,17 +1,32 @@
-const { app, BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen, ipcMain } = require('electron');
 const http = require('http');
 const path = require('path');
 
 const PORT = 47800; // 本地事件接口端口
 
+// 通知动画极轻（单元素平移），软件合成足够，关掉 GPU 进程省内存/电
+app.disableHardwareAcceleration();
+
+// ---- 覆盖层窗口：按需创建、空闲销毁，平时完全不占渲染资源 ----
 let win = null;
+let ready = false;
+let pending = []; // 窗口加载完成前暂存的事件
 
-function createOverlay() {
-  const display = screen.getPrimaryDisplay();
-  const { x, y, width, height } = display.bounds;
+function applyOverlayFlags(w) {
+  w.setAlwaysOnTop(true, 'screen-saver');
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  w.setIgnoreMouseEvents(true, { forward: true });
+}
 
+function ensureOverlay() {
+  if (win && !win.isDestroyed()) {
+    if (!win.isVisible()) win.showInactive();
+    return;
+  }
+  const { x, y, width, height } = screen.getPrimaryDisplay().bounds;
   win = new BrowserWindow({
     x, y, width, height,
+    show: false,
     transparent: true,
     frame: false,
     hasShadow: false,
@@ -20,26 +35,44 @@ function createOverlay() {
     focusable: false,
     skipTaskbar: true,
     fullscreenable: false,
-    // 关键：盖在所有应用上层
     alwaysOnTop: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      autoplayPolicy: 'no-user-gesture-required', // 允许无交互播放合成音效
+      autoplayPolicy: 'no-user-gesture-required',
+      backgroundThrottling: false,
     },
   });
-
-  // 置顶到最高层级 + 在所有桌面/全屏空间可见
-  win.setAlwaysOnTop(true, 'screen-saver');
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  // 鼠标全程穿透（forward:true 让窗口仍能收到移动事件以便将来扩展）
-  win.setIgnoreMouseEvents(true, { forward: true });
-
+  applyOverlayFlags(win);
+  ready = false;
+  win.webContents.once('did-finish-load', () => {
+    ready = true;
+    win.showInactive(); // 显示但不抢焦点
+    const q = pending;
+    pending = [];
+    q.forEach((e) => win.webContents.send('notify', e));
+  });
   win.loadFile(path.join(__dirname, 'overlay.html'));
 }
 
-// 本地事件服务：任何适配器（Claude Code hook / 飞书 / codex）POST 到这里
+function deliver(evt) {
+  ensureOverlay();
+  if (ready && win && !win.isDestroyed()) win.webContents.send('notify', evt);
+  else pending.push(evt);
+}
+
+function destroyOverlay() {
+  ready = false;
+  pending = [];
+  if (win && !win.isDestroyed()) win.destroy();
+  win = null;
+}
+
+// 渲染层在「队列清空、无停留飞机」时通知主进程销毁窗口，回到休眠
+ipcMain.on('overlay-idle', () => destroyOverlay());
+
+// ---- 本地事件服务：任何适配器 POST 到这里 ----
 function startEventServer() {
   const server = http.createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/notify') {
@@ -47,15 +80,9 @@ function startEventServer() {
       req.on('data', (c) => (body += c));
       req.on('end', () => {
         let evt;
-        try {
-          evt = JSON.parse(body || '{}');
-        } catch (e) {
-          res.writeHead(400);
-          return res.end('bad json');
-        }
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('notify', evt);
-        }
+        try { evt = JSON.parse(body || '{}'); }
+        catch (e) { res.writeHead(400); return res.end('bad json'); }
+        deliver(evt);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
       });
@@ -70,11 +97,9 @@ function startEventServer() {
 }
 
 app.whenReady().then(() => {
-  // 不在 Dock 显示，纯后台常驻
   if (app.dock) app.dock.hide();
-  createOverlay();
   startEventServer();
+  // 注意：不在启动时创建覆盖层，第一条通知到来才拉起
 });
 
-// 后台常驻：所有窗口关闭也不退出
-app.on('window-all-closed', () => {});
+app.on('window-all-closed', () => {}); // 后台常驻，无窗口也不退出

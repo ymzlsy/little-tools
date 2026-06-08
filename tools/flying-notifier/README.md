@@ -63,25 +63,47 @@ curl -X POST http://127.0.0.1:47800/notify \
 | `message` | 字符串 | 横幅正文 |
 | `timing` | `{cross, exit}` 毫秒（可选） | 飞入时长 / 飞出时长 |
 
+## 开机自启（macOS）
+
+```bash
+bash adapters/install-launchagent.sh
+```
+
+登录自动启动 + 崩溃自动拉起，从此不用手动开关。直接跑 Electron 二进制（跳过 node 启动器），空闲约 140MB。卸载/重启命令脚本运行后会打印。
+
 ## 接入 Claude Code（推荐）
 
-在 `~/.claude/settings.json` 加两个 hook，让真实会话状态触发飞机：
+仓库自带适配器 `adapters/claude-hook.js`：从 stdin 读 hook JSON，映射成事件 POST 给通知器；通知器没开/超时一律静默退出 0，**绝不阻塞 Claude**。
+
+在 `~/.claude/settings.json` 加两个 hook（把路径换成你的绝对路径）：
 
 ```jsonc
 {
   "hooks": {
     "Notification": [{ "hooks": [{ "type": "command",
-      "command": "node /绝对路径/tools/flying-notifier/adapters/claude-hook.js" }] }],
+      "command": "node \"/绝对路径/tools/flying-notifier/adapters/claude-hook.js\"" }] }],
     "Stop":         [{ "hooks": [{ "type": "command",
-      "command": "node /绝对路径/tools/flying-notifier/adapters/claude-hook.js" }] }]
+      "command": "node \"/绝对路径/tools/flying-notifier/adapters/claude-hook.js\"" }] }]
   }
 }
 ```
 
-- `Notification` → 需授权 / 卡住等待
-- `Stop` → 已完成
+- `Notification`（message 含 permission/授权）→ 需授权(红)，否则 → 卡住等待(黄)
+- `Stop` → 已完成(绿)
 
-> 适配器与开机自启（LaunchAgent）见下方路线图，正在完善。
+横幅显示项目名（取 `cwd` 目录名），多会话并发可区分。
+
+## 资源占用
+
+按需创建窗口、空闲销毁，平时完全休眠：
+
+| 状态 | 内存 | CPU / GPU |
+|------|------|-----------|
+| 空闲（无通知） | ~140MB | 0% / 无 GPU 进程 |
+| 通知飞行/停留中 | ~190MB | ≈0% |
+| 挥手赶走后 | 回到 ~140MB | 0% |
+
+已关闭硬件加速、仅在飞机停留期间监听鼠标，对 CPU/电池/风扇几乎零打扰。~140MB 是 Electron 运行时地板。
 
 ## 路线图
 
@@ -89,9 +111,10 @@ curl -X POST http://127.0.0.1:47800/notify \
 - [x] 本地事件服务（HTTP）
 - [x] 飞过合成音效
 - [x] 停在右侧、悬停移开才飞走
-- [ ] Claude Code hook 适配器（`adapters/claude-hook.js`）
+- [x] 按需创建 / 空闲销毁，平时休眠（空闲 ~140MB，0% CPU）
+- [x] Claude Code hook 适配器（`adapters/claude-hook.js`）
+- [x] 登录自启（macOS LaunchAgent，`adapters/install-launchagent.sh`）
 - [ ] 飞书 lark-cli 适配器
-- [ ] 登录自启（macOS LaunchAgent）
 - [ ] 多航道（同时停多条通知）
 - [ ] 配置文件（自定义机型 / 配色 / 音效 / 位置）
 
