@@ -84,7 +84,7 @@
   </div>
 
   <div id="stage"></div>
-  <div class="hint">点下面的按钮，发射一架通知飞机 →<br>飞机停在右侧后，把光标移上去再移开，它才会飞走</div>
+  <div class="hint">点下面的按钮，发射一架通知飞机 →<br>飞机停在右侧后：点击它跳转（桌面版），或把光标移上去再移开放飞</div>
 
   <div class="controls">
     <button data-s="claude" data-t="auth"    data-m="沈阳客运 · Claude 需要授权运行 Bash">Claude 需授权</button>
@@ -105,7 +105,7 @@ const TYPE = {
   default: { cls:'',          label:'通知' },
 };
 const HAS_LOGO = { claude:1, feishu:1, codex:1 };
-const TIMING = { cross:5000, exit:900 };
+const TIMING = { cross:8000, exit:900 };
 
 const stage = document.getElementById('stage');
 const hint = document.querySelector('.hint');
@@ -158,6 +158,10 @@ function play(evt){
       <div class="plane p-${s}">${AIRCRAFT[s]||AIRCRAFT.default}</div>`;
     f.querySelector('.b-title').textContent = title;
     if(msg) f.querySelector('.b-msg').textContent = msg;
+    f.style.cursor = 'pointer';
+    f.addEventListener('click', ()=>{ // 桌面版点击会跳转到对应场景；网页 Demo 点击即放飞
+      if(parked){ const p=parked; parked=null; p.dismiss(); }
+    });
     stage.appendChild(f);
     requestAnimationFrame(()=>{
       const w = f.offsetWidth, W = stage.clientWidth, restX = W - w;

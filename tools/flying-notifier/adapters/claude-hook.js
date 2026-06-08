@@ -21,7 +21,11 @@ process.stdin.on('end', () => {
   try { h = JSON.parse(input || '{}'); } catch (e) { process.exit(0); }
 
   const ev = h.hook_event_name || '';
-  const project = path.basename(h.cwd || process.cwd() || '') || 'Claude';
+  const cwd = h.cwd || process.cwd() || '';
+  const project = path.basename(cwd) || 'Claude';
+  // 点击横幅 → 打开该会话的项目目录（session 位置代理）。
+  // 想跳到编辑器可改成 { type:'exec', target:'code', args:[cwd] } 或 cursor。
+  const action = cwd ? { type: 'open', target: cwd } : undefined;
 
   let type, detail;
   if (ev === 'Stop' || ev === 'SubagentStop') {
@@ -40,7 +44,7 @@ process.stdin.on('end', () => {
     process.exit(0); // 其它 hook 不处理
   }
 
-  send({ scenario: 'claude', type, message: `${project} · ${detail}` });
+  send({ scenario: 'claude', type, message: `${project} · ${detail}`, action });
 });
 
 function send(evt) {

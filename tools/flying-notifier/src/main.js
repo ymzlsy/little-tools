@@ -1,4 +1,5 @@
-const { app, BrowserWindow, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, shell } = require('electron');
+const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
 
@@ -71,6 +72,33 @@ function destroyOverlay() {
 
 // 渲染层在「队列清空、无停留飞机」时通知主进程销毁窗口，回到休眠
 ipcMain.on('overlay-idle', () => destroyOverlay());
+
+// 光标移到飞机上 → 临时关穿透使其可点击；离开 → 恢复穿透
+ipcMain.on('set-interactive', (_e, on) => {
+  if (!win || win.isDestroyed()) return;
+  if (on) win.setIgnoreMouseEvents(false);
+  else win.setIgnoreMouseEvents(true, { forward: true });
+});
+
+// 点击横幅/飞机 → 跳转到对应场景位置
+ipcMain.on('jump', (_e, action) => {
+  if (!action || !action.target) return;
+  try {
+    switch (action.type) {
+      case 'url':                       // 网址 / 应用深链（如 lark://…）
+        shell.openExternal(action.target); break;
+      case 'reveal':                    // 在访达中定位文件/目录
+        shell.showItemInFolder(action.target); break;
+      case 'app':                       // 激活某个 App（open -a）
+        spawn('open', ['-a', action.target]); break;
+      case 'exec':                      // 自定义命令（如 code <dir> / cursor <dir>）
+        spawn(action.target, action.args || [], { detached: true, stdio: 'ignore' }).unref(); break;
+      case 'open':                      // 打开文件/目录（默认程序）
+      default:
+        shell.openPath(action.target);
+    }
+  } catch (e) { /* 跳转失败不影响通知器 */ }
+});
 
 // ---- 本地事件服务：任何适配器 POST 到这里 ----
 function startEventServer() {

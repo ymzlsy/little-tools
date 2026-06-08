@@ -24,7 +24,7 @@ const SCENE_LABEL = {
   codex: 'codex',
 };
 
-const DEFAULT_TIMING = { cross: 5000, exit: 900 };
+const DEFAULT_TIMING = { cross: 8000, exit: 900 };
 
 const stage = document.getElementById('stage');
 const queue = [];
@@ -97,12 +97,28 @@ function onMouseMove(e) {
     e.clientY >= r.top && e.clientY <= r.bottom;
   if (inside) {
     parked.entered = true; // 光标移上去了
-  } else if (parked.entered) {
-    const p = parked;
-    parked = null;
-    window.removeEventListener('mousemove', onMouseMove);
-    p.dismiss();
+    // 移到飞机/横幅上 → 临时关掉鼠标穿透，使其可点击
+    if (!parked.interactive) { parked.interactive = true; window.fn.setInteractive(true); }
+  } else {
+    // 离开 → 恢复穿透
+    if (parked.interactive) { parked.interactive = false; window.fn.setInteractive(false); }
+    if (parked.entered) {
+      const p = parked;
+      parked = null;
+      window.removeEventListener('mousemove', onMouseMove);
+      p.dismiss();
+    }
   }
+}
+
+// 关掉当前停留的飞机（点击跳转后或挥手后调用）
+function clearParked() {
+  if (!parked) return;
+  const p = parked;
+  parked = null;
+  window.removeEventListener('mousemove', onMouseMove);
+  if (p.interactive) window.fn.setInteractive(false);
+  p.dismiss();
 }
 
 function enqueue(evt) {
@@ -152,6 +168,14 @@ function play(evt) {
     `;
     flight.querySelector('.b-title').textContent = title;
     if (msg) flight.querySelector('.b-msg').textContent = msg;
+
+    // 点击横幅/飞机 → 跳转到对应场景，然后飞走
+    flight.style.cursor = 'pointer';
+    flight.addEventListener('click', () => {
+      if (evt.action) window.fn.jump(evt.action);
+      clearParked();
+    });
+
     stage.appendChild(flight);
 
     requestAnimationFrame(() => {
@@ -185,7 +209,7 @@ function play(evt) {
             resolve();
           };
         };
-        parked = { rect: flight.getBoundingClientRect(), entered: false, dismiss };
+        parked = { rect: flight.getBoundingClientRect(), entered: false, interactive: false, dismiss };
         window.addEventListener('mousemove', onMouseMove); // 仅停留期间监听鼠标
       };
     });
