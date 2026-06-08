@@ -9,8 +9,8 @@ const ROPE_LEN = 330;  // 机尾到被拖物的绳长（横幅更长）
 const TAIL_OFF = 96;   // 机身中心到机尾尖的距离（绳子系在这里）
 // 软绳物理（Verlet）：质点数 / 每帧重力 / 阻尼(越接近1越飘越爱摆)
 const ROPE_SEG = 9;
-const ROPE_GRAV = 0.12;  // 很轻 → 主要拖在身后随轨迹甩动，仅轻微下垂
-const ROPE_DAMP = 0.985; // 高阻尼保留惯性 → 转弯时绳子有甩动余韵
+const ROPE_GRAV = 0;     // 无重量 → 不下垂，像飘带顺着飞机轨迹拖在身后
+const ROPE_DAMP = 0.9;   // 适度惯性 → 紧贴轨迹平滑跟随、转弯顺滑
 
 // 经质点拟合一条平滑曲线(Catmull-Rom)
 function smoothPath(pts) {
@@ -137,10 +137,9 @@ function fly(evt) {
         ropePts[0].x = tx; ropePts[0].y = ty; ropePts[0].px = tx; ropePts[0].py = ty;
         for (let i = 1; i <= ROPE_SEG; i++) {
           const p = ropePts[i];
-          const g = (i === ROPE_SEG) ? 0 : ROPE_GRAV; // 末端(挂 LOGO)无重量 → 随绳飘着不下坠
           const vx = (p.x - p.px) * ROPE_DAMP, vy = (p.y - p.py) * ROPE_DAMP;
           p.px = p.x; p.py = p.y;
-          p.x += vx; p.y += vy + g;
+          p.x += vx; p.y += vy + ROPE_GRAV; // ROPE_GRAV=0 → 整条绳无重量
         }
         // 长度约束（多次松弛收敛），首点保持钉住
         for (let it = 0; it < 8; it++) {
