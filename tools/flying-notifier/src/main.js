@@ -167,8 +167,9 @@ function deliver(evt) {
   lastNag = 0;
   dbg('RECV', evt.type, evt.sessionId || '');
   if (evt.type === 'active') { cancelScheduler(evt.sessionId); return; } // 回到会话 → 取消提醒
-  if (evt.type === 'done')   { scheduleDone(evt); return; }              // 完成 → 延迟提醒，不立即弹
-  deliverToOverlay(evt);                                                 // 需授权/卡住等 → 立即弹
+  // 「已完成」延迟提醒只对 Claude（有"回到会话"信号可取消）；codex 等无此信号 → 立即弹
+  if (evt.type === 'done' && evt.scenario === 'claude') { scheduleDone(evt); return; }
+  deliverToOverlay(evt);                                                 // 其余 → 立即弹
 }
 
 // ---- 摸鱼督察：超过 1 小时无任何活动 → 每 20 分钟在副屏飞一架带横幅来挖苦 ----

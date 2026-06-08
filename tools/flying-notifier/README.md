@@ -126,9 +126,26 @@ bash adapters/install-launchagent.sh
 - [x] Claude Code hook 适配器（`adapters/claude-hook.js`，Notification/Stop/UserPromptSubmit）
 - [x] 登录自启（macOS LaunchAgent，`adapters/install-launchagent.sh`）
 - [x] 多航道（多条通知上下错开同时停）
-- [x] "已完成"延迟提醒（5/10 分钟，回到会话即取消）
-- [ ] 飞书 lark-cli 适配器
+- [x] "已完成"延迟提醒（5/10 分钟，回到会话即取消，仅 Claude）
+- [x] 副屏飞行层（大飞机沿样条路径转圈 + 软绳拖 LOGO + 橙色云尾，无横幅）
+- [x] 摸鱼督察（>1h 无活动，每 20min 副屏飞带横幅讽刺文案）
+- [x] codex 适配器（`adapters/codex-notify.js`，转发 Computer Use + 完成即弹）
+- [x] 飞书会议提醒（`adapters/feishu-poller.js`，会前 20/5 分钟各一次，点击开会议）
 - [ ] 配置文件（自定义机型 / 配色 / 音效 / 位置 / 提醒间隔）
+
+## 接入 codex
+
+codex 的 `notify` 槽常被「Codex Computer Use」占用。`adapters/codex-notify.js` 是个**转发包装**：先原样转发给 Computer Use（不影响它），再在任务完成时通知小飞机。在 `~/.codex/config.toml`：
+
+```toml
+notify = ["node", "/绝对路径/adapters/codex-notify.js", "turn-ended"]
+```
+
+codex 完成 → 立即弹绿色「已完成」🛩️，点击激活 Codex App。
+
+## 飞书会议提醒
+
+`adapters/feishu-poller.js` 每分钟用 `lark-cli calendar +agenda` 拉日程，会议**开始前 20 分钟、5 分钟各提醒一次**（去重），🚁 橙色横幅显示会议名与剩余分钟，点击用 `app_link` 打开该会议。由独立 LaunchAgent 经登录 shell 启动以继承 lark-cli 鉴权（安装脚本会一并装好）。
 
 ## License
 

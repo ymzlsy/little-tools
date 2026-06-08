@@ -54,8 +54,34 @@ cat > "$PLIST" <<PLISTEOF
 PLISTEOF
 
 launchctl load "$PLIST"
+
+# 飞书会议提醒轮询器（经登录 shell 启动，继承 lark-cli 的 PATH 与鉴权）
+POLLER_LABEL="com.karaithy.feishu-poller"
+POLLER_PLIST="$HOME/Library/LaunchAgents/$POLLER_LABEL.plist"
+launchctl unload "$POLLER_PLIST" 2>/dev/null || true
+cat > "$POLLER_PLIST" <<P2
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$POLLER_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>exec node "$RUN_DIR/adapters/feishu-poller.js"</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/feishu-poller.log</string>
+  <key>StandardErrorPath</key><string>/tmp/feishu-poller.log</string>
+</dict>
+</plist>
+P2
+launchctl load "$POLLER_PLIST"
+
 echo ""
-echo "✅ 已安装并启动：$LABEL"
+echo "✅ 已安装并启动：$LABEL + $POLLER_LABEL（飞书会议提醒）"
 echo "   运行副本: $RUN_DIR"
 echo "   日志:     /tmp/flying-notifier.log"
 echo ""
