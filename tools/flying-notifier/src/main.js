@@ -79,7 +79,62 @@ function deliverToOverlay(evt) {
   ensureOverlay();
   if (ready && win && !win.isDestroyed()) win.webContents.send('notify', evt);
   else pending.push(evt);
+  deliverSecondary(evt); // 副屏同步飞一架（转圈+拖尾，无横幅）
 }
+
+// ---- 副屏飞行层：每块副屏一个全屏覆盖窗，按需创建、飞完销毁 ----
+const secWins = new Map(); // displayId -> { win, ready, pending }
+
+function secondaryDisplays() {
+  const primaryId = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().filter((d) => d.id !== primaryId);
+}
+
+function ensureSecOverlay(d) {
+  let s = secWins.get(d.id);
+  if (s && s.win && !s.win.isDestroyed()) { raise(s.win); return s; }
+  const b = d.bounds;
+  const w = new BrowserWindow({
+    x: b.x, y: b.y, width: b.width, height: b.height,
+    show: false, transparent: true, frame: false, hasShadow: false,
+    resizable: false, movable: false, focusable: false, skipTaskbar: true,
+    fullscreenable: false, alwaysOnTop: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false,
+      autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false,
+    },
+  });
+  applyOverlayFlags(w);
+  s = { win: w, ready: false, pending: [] };
+  w.webContents.once('did-finish-load', () => {
+    s.ready = true;
+    raise(w);
+    s.pending.splice(0).forEach((e) => w.webContents.send('fly', e));
+  });
+  w.loadFile(path.join(__dirname, 'secondary.html'));
+  secWins.set(d.id, s);
+  return s;
+}
+
+function deliverSecondary(evt) {
+  for (const d of secondaryDisplays()) {
+    const s = ensureSecOverlay(d);
+    if (s.ready && s.win && !s.win.isDestroyed()) s.win.webContents.send('fly', evt);
+    else s.pending.push(evt);
+  }
+}
+
+// 副屏飞行结束（无在飞）→ 销毁该副屏窗
+ipcMain.on('sec-idle', (e) => {
+  for (const [id, s] of secWins) {
+    if (s.win && !s.win.isDestroyed() && s.win.webContents === e.sender) {
+      s.win.destroy();
+      secWins.delete(id);
+      break;
+    }
+  }
+});
 
 // ---- 「已完成」延迟提醒调度：完成后 5/10 分钟若仍未回到该会话才弹 ----
 const REMIND_1_MS = Number(process.env.FN_REMIND1_MS) || 5 * 60 * 1000;

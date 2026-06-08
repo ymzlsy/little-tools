@@ -7,4 +7,7 @@ contextBridge.exposeInMainWorld('fn', {
   setHeight: (h) => ipcRenderer.send('set-height', h),
   jump: (action) => ipcRenderer.send('jump', action),
   opened: (sessionId) => ipcRenderer.send('opened', sessionId),
+  // 副屏飞行层
+  onFly: (cb) => ipcRenderer.on('fly', (_e, evt) => cb(evt)),
+  secIdle: () => ipcRenderer.send('sec-idle'),
 });

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; pointer-events: none; }
+  #stage { position: absolute; inset: 0; }
+
+  .sec-plane {
+    position: absolute; top: 0; left: 0;
+    font-size: 72px; line-height: 1;
+    will-change: offset-distance, offset-rotate;
+  }
+  .sec-logo {
+    position: absolute; top: 0; left: 0;
+    width: 50px; height: 50px; border-radius: 13px; object-fit: contain;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    will-change: offset-distance;
+  }
+  /* 飞机云拖尾 */
+  .puff {
+    position: absolute;
+    background: radial-gradient(circle, rgba(255,255,255,0.95), rgba(255,255,255,0));
+    border-radius: 50%;
+    filter: blur(2px);
+    transform: translate(-50%, -50%);
+    will-change: opacity, transform;
+    animation: puff 1.2s ease-out forwards;
+  }
+  @keyframes puff {
+    from { opacity: 0.85; transform: translate(-50%, -50%) scale(0.5); }
+    to   { opacity: 0;    transform: translate(-50%, -50%) scale(2.0); }
+  }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <script src="secondary.js"></script>
+</body>
+</html>
