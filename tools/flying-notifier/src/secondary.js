@@ -137,9 +137,10 @@ function fly(evt) {
         ropePts[0].x = tx; ropePts[0].y = ty; ropePts[0].px = tx; ropePts[0].py = ty;
         for (let i = 1; i <= ROPE_SEG; i++) {
           const p = ropePts[i];
+          const g = (i === ROPE_SEG) ? 0 : ROPE_GRAV; // 末端(挂 LOGO)无重量 → 随绳飘着不下坠
           const vx = (p.x - p.px) * ROPE_DAMP, vy = (p.y - p.py) * ROPE_DAMP;
           p.px = p.x; p.py = p.y;
-          p.x += vx; p.y += vy + ROPE_GRAV;
+          p.x += vx; p.y += vy + g;
         }
         // 长度约束（多次松弛收敛），首点保持钉住
         for (let it = 0; it < 8; it++) {
