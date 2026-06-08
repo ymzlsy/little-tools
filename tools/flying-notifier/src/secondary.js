@@ -6,7 +6,8 @@ const ROT_BASE = { claude: ' 45deg', codex: ' -55deg', feishu: '', idle: ' 45deg
 
 const DUR = 13000;     // 飞行时长
 const ROPE_LEN = 330;  // 机尾到被拖物的绳长（横幅更长）
-const TAIL_OFF = 96;   // 机身中心到机尾尖的距离（绳子系在这里）
+// 机身中心到机尾的距离（绳子系在这里），按机型不同
+const TAIL_OFF = { claude: 96, codex: 96, feishu: 64, idle: 96, default: 96 };
 // 软绳物理（Verlet）：质点数 / 每帧重力 / 阻尼(越接近1越飘越爱摆)
 const ROPE_SEG = 9;
 const ROPE_GRAV = 0;     // 无重量 → 不下垂，像飘带顺着飞机轨迹拖在身后
@@ -74,6 +75,7 @@ function fly(evt) {
   const plane = AIRCRAFT[s] || AIRCRAFT.default;
   const W = window.innerWidth, H = window.innerHeight;
   const d = buildPath(W, H);
+  const tailOff = TAIL_OFF[s] != null ? TAIL_OFF[s] : TAIL_OFF.default;
 
   const planeEl = document.createElement('div');
   planeEl.className = 'sec-plane';
@@ -124,7 +126,7 @@ function fly(evt) {
       let dx = pc.x - prev.x, dy = pc.y - prev.y;
       const len = Math.hypot(dx, dy) || 1;
       dx /= len; dy /= len;
-      tx = pc.x - dx * TAIL_OFF; ty = pc.y - dy * TAIL_OFF; // 沿飞行反方向退到机尾
+      tx = pc.x - dx * tailOff; ty = pc.y - dy * tailOff; // 沿飞行反方向退到机尾
       if (towEl) {
         const seg = ropeLen / ROPE_SEG;
         if (!ropePts) { // 初始化：沿机尾后方一字排开
