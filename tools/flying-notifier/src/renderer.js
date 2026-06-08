@@ -111,16 +111,6 @@ function onMouseMove(e) {
   }
 }
 
-// 关掉当前停留的飞机（点击跳转后或挥手后调用）
-function clearParked() {
-  if (!parked) return;
-  const p = parked;
-  parked = null;
-  window.removeEventListener('mousemove', onMouseMove);
-  if (p.interactive) window.fn.setInteractive(false);
-  p.dismiss();
-}
-
 function enqueue(evt) {
   queue.push(evt);
   pump();
@@ -169,11 +159,10 @@ function play(evt) {
     flight.querySelector('.b-title').textContent = title;
     if (msg) flight.querySelector('.b-msg').textContent = msg;
 
-    // 点击横幅/飞机 → 跳转到对应场景，然后飞走
+    // 点击横幅/飞机 → 只跳转，不飞走；飞机一直停着，直到光标离开才飞走
     flight.style.cursor = 'pointer';
     flight.addEventListener('click', () => {
       if (evt.action) window.fn.jump(evt.action);
-      clearParked();
     });
 
     stage.appendChild(flight);
@@ -186,12 +175,13 @@ function play(evt) {
       playJet(); // 飞过音效
 
       // 阶段一：从左飞入，停在右侧（保持不动）
+      // 用 translate3d 强制独立 GPU 合成层；末段减速更平缓，避免"爬行"判顿
       const enter = flight.animate(
         [
-          { transform: `translateX(${-w}px)` },
-          { transform: `translateX(${restX}px)` },
+          { transform: `translate3d(${-w}px,0,0)` },
+          { transform: `translate3d(${restX}px,0,0)` },
         ],
-        { duration: timing.cross, easing: 'cubic-bezier(.22,.61,.36,1)', fill: 'forwards' }
+        { duration: timing.cross, easing: 'linear', fill: 'forwards' }
       );
 
       enter.onfinish = () => {
@@ -199,8 +189,8 @@ function play(evt) {
         const dismiss = () => {
           const exit = flight.animate(
             [
-              { transform: `translateX(${restX}px)` },
-              { transform: `translateX(${W}px)` },
+              { transform: `translate3d(${restX}px,0,0)` },
+              { transform: `translate3d(${W}px,0,0)` },
             ],
             { duration: timing.exit, easing: 'cubic-bezier(.5,0,.75,0)', fill: 'forwards' }
           );

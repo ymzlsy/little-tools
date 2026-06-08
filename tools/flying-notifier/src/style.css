@@ -18,13 +18,12 @@ html, body {
 /* 一次飞行 = 横幅 + 牵引绳 + 飞机，作为整体移动 */
 .flight {
   position: absolute;
-  top: 12%;
+  top: 28px; /* 顶部窄带内的垂直位置（紧贴菜单栏下方） */
   left: 0;
   display: flex;
   align-items: center;
   white-space: nowrap;
   will-change: transform;
-  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, 0.35));
 }
 
 /* 场景 LOGO：放在横幅框左侧外 */
@@ -48,6 +47,7 @@ html, body {
   color: #fff;
   background: linear-gradient(135deg, #555, #333);
   border: 1.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
 .banner .b-title {

@@ -5,8 +5,14 @@ const path = require('path');
 
 const PORT = 47800; // 本地事件接口端口
 
-// 通知动画极轻（单元素平移），软件合成足够，关掉 GPU 进程省内存/电
-app.disableHardwareAcceleration();
+// 单实例锁：已有一个在跑时，第二个直接退出，绝不再抢端口崩溃
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+// 注：曾关闭硬件加速省内存，但全屏透明窗口上软件合成动画会卡，故保留 GPU 加速。
+// 空闲时窗口销毁，GPU 进程随之闲置，活跃期多占约 40MB 换取流畅，值得。
 
 // ---- 覆盖层窗口：按需创建、空闲销毁，平时完全不占渲染资源 ----
 let win = null;
@@ -19,14 +25,26 @@ function applyOverlayFlags(w) {
   w.setIgnoreMouseEvents(true, { forward: true });
 }
 
+// 每次显示都重新强制最高层级 + 顶到最前（防止被后聚焦的 App 盖住）
+function raise(w) {
+  if (!w || w.isDestroyed()) return;
+  w.setAlwaysOnTop(true, 'screen-saver');
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  w.showInactive();
+  w.moveTop();
+}
+
 function ensureOverlay() {
   if (win && !win.isDestroyed()) {
-    if (!win.isVisible()) win.showInactive();
+    raise(win);
     return;
   }
-  const { x, y, width, height } = screen.getPrimaryDisplay().bounds;
+  // 固定显示在主屏（带菜单栏的那块）。
+  // 只用顶部一条窄带，而不是整屏——大幅减少透明层合成开销，动画更顺。
+  const b = screen.getPrimaryDisplay().bounds;
+  const BAND_H = 120; // 只够飞机本身——透明层是软件合成，面积越小越流畅
   win = new BrowserWindow({
-    x, y, width, height,
+    x: b.x, y: b.y, width: b.width, height: BAND_H,
     show: false,
     transparent: true,
     frame: false,
@@ -49,7 +67,7 @@ function ensureOverlay() {
   ready = false;
   win.webContents.once('did-finish-load', () => {
     ready = true;
-    win.showInactive(); // 显示但不抢焦点
+    raise(win); // 显示并强制置顶（不抢焦点）
     const q = pending;
     pending = [];
     q.forEach((e) => win.webContents.send('notify', e));
@@ -118,6 +136,9 @@ function startEventServer() {
     }
     res.writeHead(404);
     res.end('not found');
+  });
+  server.on('error', (e) => {
+    console.error('[flying-notifier] event server error:', e.message); // 端口占用等也不崩溃
   });
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`[flying-notifier] event server on http://127.0.0.1:${PORT}/notify`);

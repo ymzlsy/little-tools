@@ -11,7 +11,9 @@ if (actionTarget) {
     ? { type: 'url', target: actionTarget }
     : { type: 'open', target: actionTarget };
 } else if (scenario === 'feishu') {
-  action = { type: 'app', target: 'Lark' }; // 飞书默认点击激活 Lark
+  action = { type: 'app', target: 'Lark' };   // 飞书默认点击激活 Lark
+} else if (scenario === 'claude') {
+  action = { type: 'app', target: 'Claude' }; // claude 默认点击激活 Claude 桌面 App
 }
 
 const payload = {

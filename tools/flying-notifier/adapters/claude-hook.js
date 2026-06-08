@@ -23,9 +23,10 @@ process.stdin.on('end', () => {
   const ev = h.hook_event_name || '';
   const cwd = h.cwd || process.cwd() || '';
   const project = path.basename(cwd) || 'Claude';
-  // 点击横幅 → 打开该会话的项目目录（session 位置代理）。
-  // 想跳到编辑器可改成 { type:'exec', target:'code', args:[cwd] } 或 cursor。
-  const action = cwd ? { type: 'open', target: cwd } : undefined;
+  // 点击横幅 → 把 Claude 桌面 App 拉到最前（会话宿主）。
+  // macOS 无法精准定位到具体会话标签；如改用 VS Code/Cursor，可换成
+  // { type:'exec', target:'code'（或 cursor）, args:[cwd] } 聚焦对应项目窗口。
+  const action = { type: 'app', target: 'Claude' };
 
   let type, detail;
   if (ev === 'Stop' || ev === 'SubagentStop') {
