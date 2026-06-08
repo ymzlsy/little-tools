@@ -6,8 +6,24 @@ const ROT_BASE = { claude: ' 45deg', codex: ' -55deg', feishu: '', idle: ' 45deg
 
 const DUR = 13000;     // 飞行时长
 const ROPE_LEN = 330;  // 机尾到被拖物的绳长（横幅更长）
-const ROPE_SAG = 0.5;  // 下垂量占绳长比例（越大越软）
 const TAIL_OFF = 96;   // 机身中心到机尾尖的距离（绳子系在这里）
+// 软绳物理（Verlet）：质点数 / 每帧重力 / 阻尼(越接近1越飘越爱摆)
+const ROPE_SEG = 9;
+const ROPE_GRAV = 0.12;  // 很轻 → 主要拖在身后随轨迹甩动，仅轻微下垂
+const ROPE_DAMP = 0.985; // 高阻尼保留惯性 → 转弯时绳子有甩动余韵
+
+// 经质点拟合一条平滑曲线(Catmull-Rom)
+function smoothPath(pts) {
+  if (pts.length < 2) return '';
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || pts[i + 1];
+    const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
 const PUFF_MS = 75;    // 撒云间隔
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -98,7 +114,7 @@ function fly(evt) {
   );
 
   // 每帧：按飞行方向用软绳把 LOGO 挂在机尾；按节奏撒橙色云
-  let running = true, prev = null, lastPuff = 0;
+  let running = true, prev = null, lastPuff = 0, ropePts = null;
   function frame(ts) {
     if (!running) return;
     const pc = center(planeEl);
@@ -109,16 +125,39 @@ function fly(evt) {
       dx /= len; dy /= len;
       tx = pc.x - dx * TAIL_OFF; ty = pc.y - dy * TAIL_OFF; // 沿飞行反方向退到机尾
       if (towEl) {
-        const lx = tx - dx * ropeLen, ly = ty - dy * ropeLen; // 被拖物在机尾后方
-        towEl.style.left = lx + 'px';
-        towEl.style.top = ly + 'px';
-        // 软绳：三次贝塞尔，两控制点向下拉 → 悬链线式自然深垂；起点=机尾尖
-        const sag = ropeLen * ROPE_SAG;
-        const rdx = lx - tx, rdy = ly - ty;
-        const c1x = tx + rdx / 3, c1y = ty + rdy / 3 + sag;
-        const c2x = tx + rdx * 2 / 3, c2y = ty + rdy * 2 / 3 + sag;
-        ropePath.setAttribute('d',
-          `M ${tx.toFixed(0)} ${ty.toFixed(0)} C ${c1x.toFixed(0)} ${c1y.toFixed(0)}, ${c2x.toFixed(0)} ${c2y.toFixed(0)}, ${lx.toFixed(0)} ${ly.toFixed(0)}`);
+        const seg = ropeLen / ROPE_SEG;
+        if (!ropePts) { // 初始化：沿机尾后方一字排开
+          ropePts = [];
+          for (let i = 0; i <= ROPE_SEG; i++) {
+            const x = tx - dx * seg * i, y = ty - dy * seg * i;
+            ropePts.push({ x, y, px: x, py: y });
+          }
+        }
+        // Verlet 积分：惯性 + 重力（首点钉在机尾）
+        ropePts[0].x = tx; ropePts[0].y = ty; ropePts[0].px = tx; ropePts[0].py = ty;
+        for (let i = 1; i <= ROPE_SEG; i++) {
+          const p = ropePts[i];
+          const vx = (p.x - p.px) * ROPE_DAMP, vy = (p.y - p.py) * ROPE_DAMP;
+          p.px = p.x; p.py = p.y;
+          p.x += vx; p.y += vy + ROPE_GRAV;
+        }
+        // 长度约束（多次松弛收敛），首点保持钉住
+        for (let it = 0; it < 8; it++) {
+          ropePts[0].x = tx; ropePts[0].y = ty;
+          for (let i = 0; i < ROPE_SEG; i++) {
+            const a = ropePts[i], b = ropePts[i + 1];
+            let ddx = b.x - a.x, ddy = b.y - a.y;
+            const dd = Math.hypot(ddx, ddy) || 0.0001;
+            const diff = ((dd - seg) / dd) * 0.5;
+            const ox = ddx * diff, oy = ddy * diff;
+            if (i !== 0) { a.x += ox; a.y += oy; }
+            b.x -= ox; b.y -= oy;
+          }
+        }
+        const end = ropePts[ROPE_SEG]; // 被拖物挂在绳子自由端 → 随之自然摆动
+        towEl.style.left = end.x + 'px';
+        towEl.style.top = end.y + 'px';
+        ropePath.setAttribute('d', smoothPath(ropePts));
       }
     }
     prev = pc;
