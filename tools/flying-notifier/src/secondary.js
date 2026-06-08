@@ -5,8 +5,9 @@ const HAS_LOGO = { claude: 1, feishu: 1, codex: 1 };
 const ROT_BASE = { claude: ' 45deg', codex: ' 35deg', feishu: '', idle: ' 45deg', default: ' 45deg' };
 
 const DUR = 13000;     // 飞行时长
-const ROPE_LEN = 330;  // 飞机到被拖物的绳长（横幅更长）
+const ROPE_LEN = 330;  // 机尾到被拖物的绳长（横幅更长）
 const ROPE_SAG = 0.5;  // 下垂量占绳长比例（越大越软）
+const TAIL_OFF = 96;   // 机身中心到机尾尖的距离（绳子系在这里）
 const PUFF_MS = 75;    // 撒云间隔
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -101,23 +102,27 @@ function fly(evt) {
   function frame(ts) {
     if (!running) return;
     const pc = center(planeEl);
-    if (towEl && prev) {
+    let tx = pc.x, ty = pc.y; // 机尾尖（绳子/尾焰的起点）
+    if (prev) {
       let dx = pc.x - prev.x, dy = pc.y - prev.y;
       const len = Math.hypot(dx, dy) || 1;
       dx /= len; dy /= len;
-      const lx = pc.x - dx * ropeLen, ly = pc.y - dy * ropeLen;
-      towEl.style.left = lx + 'px';
-      towEl.style.top = ly + 'px';
-      // 软绳：三次贝塞尔，两控制点都向下拉 → 悬链线式自然深垂
-      const sag = ropeLen * ROPE_SAG;
-      const rdx = lx - pc.x, rdy = ly - pc.y;
-      const c1x = pc.x + rdx / 3, c1y = pc.y + rdy / 3 + sag;
-      const c2x = pc.x + rdx * 2 / 3, c2y = pc.y + rdy * 2 / 3 + sag;
-      ropePath.setAttribute('d',
-        `M ${pc.x.toFixed(0)} ${pc.y.toFixed(0)} C ${c1x.toFixed(0)} ${c1y.toFixed(0)}, ${c2x.toFixed(0)} ${c2y.toFixed(0)}, ${lx.toFixed(0)} ${ly.toFixed(0)}`);
+      tx = pc.x - dx * TAIL_OFF; ty = pc.y - dy * TAIL_OFF; // 沿飞行反方向退到机尾
+      if (towEl) {
+        const lx = tx - dx * ropeLen, ly = ty - dy * ropeLen; // 被拖物在机尾后方
+        towEl.style.left = lx + 'px';
+        towEl.style.top = ly + 'px';
+        // 软绳：三次贝塞尔，两控制点向下拉 → 悬链线式自然深垂；起点=机尾尖
+        const sag = ropeLen * ROPE_SAG;
+        const rdx = lx - tx, rdy = ly - ty;
+        const c1x = tx + rdx / 3, c1y = ty + rdy / 3 + sag;
+        const c2x = tx + rdx * 2 / 3, c2y = ty + rdy * 2 / 3 + sag;
+        ropePath.setAttribute('d',
+          `M ${tx.toFixed(0)} ${ty.toFixed(0)} C ${c1x.toFixed(0)} ${c1y.toFixed(0)}, ${c2x.toFixed(0)} ${c2y.toFixed(0)}, ${lx.toFixed(0)} ${ly.toFixed(0)}`);
+      }
     }
     prev = pc;
-    if (ts - lastPuff > PUFF_MS) { lastPuff = ts; spawnPuff(pc.x, pc.y); }
+    if (ts - lastPuff > PUFF_MS) { lastPuff = ts; spawnPuff(tx, ty); } // 尾焰从机尾喷
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
