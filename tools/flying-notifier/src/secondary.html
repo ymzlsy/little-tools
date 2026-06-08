@@ -21,9 +21,9 @@
   /* 被拖的横幅（三种场景都带；含 LOGO + 任务内容，按类型配色） */
   .sec-banner {
     position: absolute; top: 0; left: 0; z-index: 2;
-    transform: translate(-50%, -50%);
+    transform: translate(-100%, -50%); /* 右边缘对准绳子末端 → 绳子系在横幅最右侧 */
     display: flex; align-items: center; gap: 14px;
-    max-width: 560px; white-space: normal;
+    white-space: nowrap; /* 横幅文字始终单行，不换行 */
     padding: 14px 24px; border-radius: 18px;
     font: 800 28px/1.25 -apple-system, "PingFang SC", sans-serif; color: #fff;
     background: linear-gradient(135deg, #555, #333);
