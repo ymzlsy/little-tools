@@ -75,10 +75,34 @@ function ensureOverlay() {
   win.loadFile(path.join(__dirname, 'overlay.html'));
 }
 
-function deliver(evt) {
+function deliverToOverlay(evt) {
   ensureOverlay();
   if (ready && win && !win.isDestroyed()) win.webContents.send('notify', evt);
   else pending.push(evt);
+}
+
+// ---- 「已完成」延迟提醒调度：完成后 5/10 分钟若仍未回到该会话才弹 ----
+const REMIND_1_MS = Number(process.env.FN_REMIND1_MS) || 5 * 60 * 1000;
+const REMIND_2_MS = Number(process.env.FN_REMIND2_MS) || 10 * 60 * 1000;
+const schedulers = new Map(); // sessionId -> [timeoutId,...]
+
+function cancelScheduler(sid) {
+  const t = schedulers.get(sid);
+  if (t) { t.forEach(clearTimeout); schedulers.delete(sid); console.log('[fn] 取消提醒', sid); }
+}
+function scheduleDone(evt) {
+  const sid = evt.sessionId || `anon-${schedulers.size}-${evt.message || ''}`;
+  cancelScheduler(sid); // 同一会话再次完成 → 重置计时
+  const fire = (n) => () => { console.log('[fn] 提醒#' + n, sid); deliverToOverlay(evt); };
+  schedulers.set(sid, [setTimeout(fire(1), REMIND_1_MS), setTimeout(fire(2), REMIND_2_MS)]);
+  console.log('[fn] 已排程已完成提醒', sid, REMIND_1_MS, REMIND_2_MS);
+}
+
+// HTTP 收到事件后的路由
+function deliver(evt) {
+  if (evt.type === 'active') { cancelScheduler(evt.sessionId); return; } // 回到会话 → 取消提醒
+  if (evt.type === 'done')   { scheduleDone(evt); return; }              // 完成 → 延迟提醒，不立即弹
+  deliverToOverlay(evt);                                                 // 需授权/卡住等 → 立即弹
 }
 
 function destroyOverlay() {
@@ -97,6 +121,17 @@ ipcMain.on('set-interactive', (_e, on) => {
   if (on) win.setIgnoreMouseEvents(false);
   else win.setIgnoreMouseEvents(true, { forward: true });
 });
+
+// 渲染层按当前停靠航道数请求窗口高度（多架堆叠时变高，否则保持窄带）
+ipcMain.on('set-height', (_e, h) => {
+  if (!win || win.isDestroyed()) return;
+  const b = win.getBounds();
+  const want = Math.max(120, Math.round(h || 120));
+  if (b.height !== want) win.setBounds({ x: b.x, y: b.y, width: b.width, height: want });
+});
+
+// 点开了对应会话（点击飞机/回到会话）→ 取消该会话后续提醒
+ipcMain.on('opened', (_e, sid) => cancelScheduler(sid));
 
 // 点击横幅/飞机 → 跳转到对应场景位置
 ipcMain.on('jump', (_e, action) => {

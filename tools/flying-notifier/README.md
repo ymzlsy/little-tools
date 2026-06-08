@@ -77,23 +77,32 @@ bash adapters/install-launchagent.sh
 
 仓库自带适配器 `adapters/claude-hook.js`：从 stdin 读 hook JSON，映射成事件 POST 给通知器；通知器没开/超时一律静默退出 0，**绝不阻塞 Claude**。
 
-在 `~/.claude/settings.json` 加两个 hook（把路径换成你的绝对路径）：
+在 `~/.claude/settings.json` 加三个 hook（把路径换成你的绝对路径）：
 
 ```jsonc
 {
   "hooks": {
-    "Notification": [{ "hooks": [{ "type": "command",
-      "command": "node \"/绝对路径/tools/flying-notifier/adapters/claude-hook.js\"" }] }],
-    "Stop":         [{ "hooks": [{ "type": "command",
-      "command": "node \"/绝对路径/tools/flying-notifier/adapters/claude-hook.js\"" }] }]
+    "Notification":     [{ "hooks": [{ "type": "command",
+      "command": "node \"/绝对路径/adapters/claude-hook.js\"" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command",
+      "command": "node \"/绝对路径/adapters/claude-hook.js\"" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command",
+      "command": "node \"/绝对路径/adapters/claude-hook.js\"" }] }]
   }
 }
 ```
 
-- `Notification`（message 含 permission/授权）→ 需授权(红)，否则 → 卡住等待(黄)
-- `Stop` → 已完成(绿)
+- `Notification`（message 含 permission/授权）→ 需授权(红)，否则 → 卡住等待(黄)，**立即弹**
+- `Stop` → 已完成(绿)，**延迟提醒**：完成后 5 分钟仍没回到该会话才弹第一次，10 分钟再弹一次
+- `UserPromptSubmit` → 你回到该会话发了新消息 → **取消**它待发的"已完成"提醒
 
-横幅显示项目名（取 `cwd` 目录名），多会话并发可区分。
+横幅显示项目名（取 `cwd`），多会话并发可区分。
+
+### 行为细节
+
+- **多架同时**：已有飞机停在右侧时，新通知在**下方错开一条**同时停，不互相等待
+- **停靠交互**：飞机停右侧后一直等你；光标移上去可点击（点击=跳转/激活 Claude 并取消该会话后续提醒），**点击不飞走**，只有光标离开后才飞走
+- **延迟提醒**只针对"已完成"；"需授权/卡住"会立即弹（Claude 正卡着等你）
 
 ## 资源占用
 
@@ -114,11 +123,12 @@ bash adapters/install-launchagent.sh
 - [x] 飞过合成音效
 - [x] 停在右侧、悬停移开才飞走
 - [x] 按需创建 / 空闲销毁，平时休眠（空闲 ~140MB，0% CPU）
-- [x] Claude Code hook 适配器（`adapters/claude-hook.js`）
+- [x] Claude Code hook 适配器（`adapters/claude-hook.js`，Notification/Stop/UserPromptSubmit）
 - [x] 登录自启（macOS LaunchAgent，`adapters/install-launchagent.sh`）
+- [x] 多航道（多条通知上下错开同时停）
+- [x] "已完成"延迟提醒（5/10 分钟，回到会话即取消）
 - [ ] 飞书 lark-cli 适配器
-- [ ] 多航道（同时停多条通知）
-- [ ] 配置文件（自定义机型 / 配色 / 音效 / 位置）
+- [ ] 配置文件（自定义机型 / 配色 / 音效 / 位置 / 提醒间隔）
 
 ## License
 

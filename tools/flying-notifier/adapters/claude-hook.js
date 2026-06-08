@@ -21,8 +21,15 @@ process.stdin.on('end', () => {
   try { h = JSON.parse(input || '{}'); } catch (e) { process.exit(0); }
 
   const ev = h.hook_event_name || '';
+  const sessionId = h.session_id || '';
   const cwd = h.cwd || process.cwd() || '';
   const project = path.basename(cwd) || 'Claude';
+
+  // 回到会话（发了新消息）→ 通知器取消该会话的"已完成"提醒
+  if (ev === 'UserPromptSubmit') {
+    send({ scenario: 'claude', type: 'active', sessionId });
+    return;
+  }
   // 点击横幅 → 把 Claude 桌面 App 拉到最前（会话宿主）。
   // macOS 无法精准定位到具体会话标签；如改用 VS Code/Cursor，可换成
   // { type:'exec', target:'code'（或 cursor）, args:[cwd] } 聚焦对应项目窗口。
@@ -45,7 +52,7 @@ process.stdin.on('end', () => {
     process.exit(0); // 其它 hook 不处理
   }
 
-  send({ scenario: 'claude', type, message: `${project} · ${detail}`, action });
+  send({ scenario: 'claude', type, message: `${project} · ${detail}`, action, sessionId });
 });
 
 function send(evt) {
