@@ -5,7 +5,8 @@ const HAS_LOGO = { claude: 1, feishu: 1, codex: 1 };
 const ROT_BASE = { claude: ' 45deg', codex: ' 35deg', feishu: '', idle: ' 45deg', default: ' 45deg' };
 
 const DUR = 13000;     // 飞行时长
-const ROPE_LEN = 240;  // 飞机到被拖物的绳长（横幅更长）
+const ROPE_LEN = 330;  // 飞机到被拖物的绳长（横幅更长）
+const ROPE_SAG = 0.5;  // 下垂量占绳长比例（越大越软）
 const PUFF_MS = 75;    // 撒云间隔
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -71,7 +72,7 @@ function fly(evt) {
     towEl = document.createElement('div');
     towEl.className = 'sec-banner';
     towEl.textContent = evt.banner;
-    ropeLen = 340; // 横幅大，绳子放长免得压到机身
+    ropeLen = 460; // 横幅大，绳子放长免得压到机身
     stage.appendChild(towEl);
   } else if (HAS_LOGO[s]) {
     towEl = document.createElement('img');
@@ -107,9 +108,13 @@ function fly(evt) {
       const lx = pc.x - dx * ropeLen, ly = pc.y - dy * ropeLen;
       towEl.style.left = lx + 'px';
       towEl.style.top = ly + 'px';
-      // 软绳：二次贝塞尔，控制点在中点下方 → 自然下垂
-      const mx = (pc.x + lx) / 2, my = (pc.y + ly) / 2 + ropeLen * 0.32;
-      ropePath.setAttribute('d', `M ${pc.x.toFixed(0)} ${pc.y.toFixed(0)} Q ${mx.toFixed(0)} ${my.toFixed(0)} ${lx.toFixed(0)} ${ly.toFixed(0)}`);
+      // 软绳：三次贝塞尔，两控制点都向下拉 → 悬链线式自然深垂
+      const sag = ropeLen * ROPE_SAG;
+      const rdx = lx - pc.x, rdy = ly - pc.y;
+      const c1x = pc.x + rdx / 3, c1y = pc.y + rdy / 3 + sag;
+      const c2x = pc.x + rdx * 2 / 3, c2y = pc.y + rdy * 2 / 3 + sag;
+      ropePath.setAttribute('d',
+        `M ${pc.x.toFixed(0)} ${pc.y.toFixed(0)} C ${c1x.toFixed(0)} ${c1y.toFixed(0)}, ${c2x.toFixed(0)} ${c2y.toFixed(0)}, ${lx.toFixed(0)} ${ly.toFixed(0)}`);
     }
     prev = pc;
     if (ts - lastPuff > PUFF_MS) { lastPuff = ts; spawnPuff(pc.x, pc.y); }
