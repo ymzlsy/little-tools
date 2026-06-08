@@ -89,7 +89,7 @@ html, body {
 
 /* emoji 机型默认朝向不同，分别校正机头朝右（角度经截图实测） */
 .plane.p-claude { transform: rotate(45deg); }   /* ✈️ 0°朝右上 → 转正朝右 */
-.plane.p-codex  { transform: rotate(35deg); }   /* 🛩️ 0°朝右上偏陡 → 转正朝右 */
+.plane.p-codex  { transform: rotate(-55deg); }  /* 🛩️ 在原 35° 基础上逆时针 90° */
 .plane.p-feishu { transform: scaleX(-1); }      /* 🚁 默认朝左 → 水平翻转朝右 */
 
 /* 类型配色（同场景内不同样式） */

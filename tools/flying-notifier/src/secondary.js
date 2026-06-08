@@ -2,7 +2,7 @@
 // 拖一条长长的橙色半透明飞机云，无横幅。
 const AIRCRAFT = { claude: '✈️', feishu: '🚁', codex: '🛩️', idle: '✈️', default: '✈️' };
 const HAS_LOGO = { claude: 1, feishu: 1, codex: 1 };
-const ROT_BASE = { claude: ' 45deg', codex: ' 35deg', feishu: '', idle: ' 45deg', default: ' 45deg' };
+const ROT_BASE = { claude: ' 45deg', codex: ' -55deg', feishu: '', idle: ' 45deg', default: ' 45deg' };
 
 const DUR = 13000;     // 飞行时长
 const ROPE_LEN = 330;  // 机尾到被拖物的绳长（横幅更长）
