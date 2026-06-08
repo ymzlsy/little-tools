@@ -26,11 +26,53 @@ const PAD_BOTTOM = 18;
 const RIGHT_GAP = 6;      // 停靠时机头距右边缘留白，贴边但不被切
 
 const stage = document.getElementById('stage');
-const flights = new Map(); // laneIndex -> flight 对象
+const flights = new Map(); // laneIndex -> flight 对象（始终紧凑排列 0..n-1）
+const waitQueue = [];      // 放不下时排队，不让任务掉到屏幕外
 
-function lowestFreeLane() { let i = 0; while (flights.has(i)) i++; return i; }
-function maxLane() { let m = -1; for (const k of flights.keys()) m = Math.max(m, k); return m; }
-function neededHeight() { return LANE_TOP + (maxLane() + 1) * LANE_H + PAD_BOTTOM; }
+// 航道数按主屏高度封顶（留一行给"还有N个"角标）
+const MAX_LANES = Math.max(1, Math.min(8,
+  Math.floor((screen.availHeight - LANE_TOP - PAD_BOTTOM - 42) / LANE_H)));
+
+function laneTop(lane) { return LANE_TOP + lane * LANE_H; }
+function neededHeight() { return LANE_TOP + flights.size * LANE_H + PAD_BOTTOM + (waitQueue.length ? 30 : 0); }
+
+function updateRect(f) {
+  if (!f.parked) return;
+  const top = laneTop(f.lane);
+  f.rect = { left: f.restX, right: f.restX + f.w, top, bottom: top + f.h };
+}
+
+// 处理掉一条后，剩下的全部紧凑上移补位
+function reflow() {
+  const arr = [...flights.values()].sort((a, b) => a.lane - b.lane);
+  flights.clear();
+  arr.forEach((f, i) => {
+    f.lane = i;
+    flights.set(i, f);
+    if (f.el) {
+      f.el.style.transition = 'top .35s cubic-bezier(.22,.61,.36,1)';
+      f.el.style.top = laneTop(i) + 'px';
+      updateRect(f);
+    }
+  });
+}
+
+// 屏上角标：还有多少未处理任务在排队（屏幕外不再藏东西）
+let badgeEl = null;
+function updateBadge() {
+  if (waitQueue.length > 0) {
+    if (!badgeEl) {
+      badgeEl = document.createElement('div');
+      badgeEl.className = 'more-badge';
+      stage.appendChild(badgeEl);
+    }
+    badgeEl.textContent = `还有 ${waitQueue.length} 个未处理 ↓`;
+    badgeEl.style.top = (laneTop(flights.size) + 2) + 'px';
+    badgeEl.style.display = 'block';
+  } else if (badgeEl) {
+    badgeEl.style.display = 'none';
+  }
+}
 
 // ---- 合成喷气飞过音效（无需音频文件）----
 let audioCtx = null;
@@ -101,18 +143,34 @@ function flyAway(f) {
   ex.onfinish = () => {
     f.el.remove();
     flights.delete(f.lane);
-    if (flights.size === 0) { setInteractive(false); window.fn.setIdle(); }
+    reflow(); // 剩下的紧凑上移补位
+    // 有空位就把排队的下一个拉进来（飞入最底一条）
+    if (waitQueue.length && flights.size < MAX_LANES) {
+      const next = waitQueue.shift();
+      spawn(next);
+    }
+    updateBadge();
+    if (flights.size === 0 && waitQueue.length === 0) { setInteractive(false); window.fn.setIdle(); }
     else window.fn.setHeight(neededHeight());
   };
 }
 
-function enqueue(evt) {
-  const lane = lowestFreeLane();
+function spawn(evt) {
+  const lane = flights.size; // 紧凑排列：新机挂在最底一条
   const f = { lane, parked: false, entered: false, leaving: false,
               sessionId: evt.sessionId, type: evt.type, action: evt.action };
   flights.set(lane, f);
-  window.fn.setHeight(neededHeight()); // 先把窗口撑到够高，再飞入
+  window.fn.setHeight(neededHeight());
   requestAnimationFrame(() => animate(f, evt));
+}
+
+function enqueue(evt) {
+  if (flights.size >= MAX_LANES) { // 放不下 → 排队 + 屏上提示，绝不掉到屏幕外
+    waitQueue.push(evt);
+    updateBadge();
+    return;
+  }
+  spawn(evt);
 }
 
 function animate(f, evt) {
@@ -153,9 +211,11 @@ function animate(f, evt) {
       { duration: DEFAULT_TIMING.cross, easing: 'linear', fill: 'forwards' }
     );
     enter.onfinish = () => {
-      f.rect = el.getBoundingClientRect();
+      f.w = el.offsetWidth; f.h = el.offsetHeight;
       f.parked = true;
       f.entered = false;
+      updateRect(f);
+      updateBadge();
     };
   });
 }

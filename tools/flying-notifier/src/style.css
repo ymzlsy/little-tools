@@ -15,6 +15,19 @@ html, body {
   inset: 0;
 }
 
+/* 还有 N 个未处理 角标（放不下时显示，屏幕外不藏任务） */
+.more-badge {
+  position: absolute;
+  right: 14px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff9f43, #e67e22);
+  color: #fff;
+  font: 700 12px/1.4 -apple-system, "PingFang SC", sans-serif;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
 /* 一次飞行 = 横幅 + 牵引绳 + 飞机，作为整体移动 */
 .flight {
   position: absolute;
