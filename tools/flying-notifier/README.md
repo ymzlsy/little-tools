@@ -93,8 +93,8 @@ bash adapters/install-launchagent.sh
 ```
 
 - `Notification`（message 含 permission/授权）→ 需授权(红)，否则 → 卡住等待(黄)，**立即弹**
-- `Stop` → 已完成(绿)，**延迟提醒**：完成后 5 分钟仍没回到该会话才弹第一次，10 分钟再弹一次
-- `UserPromptSubmit` → 你回到该会话发了新消息 → **取消**它待发的"已完成"提醒
+- `Stop` → 已完成(绿)，**立即弹**
+- `UserPromptSubmit` → 仅用于更新"活跃度"（喂给摸鱼督察），不弹飞机
 
 横幅显示项目名（取 `cwd`），多会话并发可区分。
 
@@ -102,7 +102,7 @@ bash adapters/install-launchagent.sh
 
 - **多架同时**：已有飞机停在右侧时，新通知在**下方错开一条**同时停，不互相等待
 - **停靠交互**：飞机停右侧后一直等你；光标移上去可点击（点击=跳转/激活 Claude 并取消该会话后续提醒），**点击不飞走**，只有光标离开后才飞走
-- **延迟提醒**只针对"已完成"；"需授权/卡住"会立即弹（Claude 正卡着等你）
+- 所有类型即时弹出
 
 ## 资源占用
 
@@ -126,7 +126,7 @@ bash adapters/install-launchagent.sh
 - [x] Claude Code hook 适配器（`adapters/claude-hook.js`，Notification/Stop/UserPromptSubmit）
 - [x] 登录自启（macOS LaunchAgent，`adapters/install-launchagent.sh`）
 - [x] 多航道（多条通知上下错开同时停）
-- [x] "已完成"延迟提醒（5/10 分钟，回到会话即取消，仅 Claude）
+- [x] 任务完成即时通知（所有场景）
 - [x] 副屏飞行层（大飞机沿样条路径转圈 + 软绳拖 LOGO + 橙色云尾，无横幅）
 - [x] 摸鱼督察（>1h 无活动，每 20min 副屏飞带横幅讽刺文案）
 - [x] codex 适配器（`adapters/codex-notify.js`，转发 Computer Use + 完成即弹）

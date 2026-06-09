@@ -166,10 +166,8 @@ function deliver(evt) {
   lastActivity = Date.now(); // 任何事件 = 有活动
   lastNag = 0;
   dbg('RECV', evt.type, evt.sessionId || '');
-  if (evt.type === 'active') { cancelScheduler(evt.sessionId); return; } // 回到会话 → 取消提醒
-  // 「已完成」延迟提醒只对 Claude（有"回到会话"信号可取消）；codex 等无此信号 → 立即弹
-  if (evt.type === 'done' && evt.scenario === 'claude') { scheduleDone(evt); return; }
-  deliverToOverlay(evt);                                                 // 其余 → 立即弹
+  if (evt.type === 'active') { cancelScheduler(evt.sessionId); return; } // UserPromptSubmit：只更新活跃度，不弹
+  deliverToOverlay(evt);                                                 // 全部即时弹（含已完成）
 }
 
 // ---- 摸鱼督察：超过 1 小时无任何活动 → 每 20 分钟在副屏飞一架带横幅来挖苦 ----
