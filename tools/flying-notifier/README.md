@@ -128,7 +128,8 @@ bash adapters/install-launchagent.sh
 - [x] 多航道（多条通知上下错开同时停）
 - [x] 任务完成即时通知（所有场景）
 - [x] 副屏飞行层（大飞机沿样条路径转圈 + 软绳拖 LOGO + 橙色云尾，无横幅）
-- [x] 摸鱼督察（>1h 无活动，每 20min 副屏飞带横幅讽刺文案）
+- [x] 摸鱼督察（>1h 无活动，每 20min 副屏飞带横幅讽刺文案 + Claude 5h/周额度剩余小字）
+- [x] 状态栏 tee（adapters/statusline-wrap.sh）抓取 rate_limits 供额度小字
 - [x] codex 适配器（`adapters/codex-notify.js`，转发 Computer Use + 完成即弹）
 - [x] 飞书会议提醒（`adapters/feishu-poller.js`，会前 20/5 分钟各一次，点击开会议）
 - [ ] 配置文件（自定义机型 / 配色 / 音效 / 位置 / 提醒间隔）

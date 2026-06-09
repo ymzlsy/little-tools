@@ -194,13 +194,30 @@ function makeNagText() {
   return t.replace('{h}', h);
 }
 
+// 读状态栏 tee 存下的额度快照，拼成"5h 剩X% · 周 剩Y%"
+function readQuota() {
+  try {
+    const snap = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'ratelimits.json'), 'utf8'));
+    const rl = snap.rate_limits || {};
+    const usedPct = (o) => o && (o.used_percentage != null ? o.used_percentage
+      : o.used_pct != null ? o.used_pct : o.usedPercent);
+    const five = usedPct(rl.five_hour || rl.fiveHour);
+    const week = usedPct(rl.seven_day || rl.sevenDay || rl.weekly);
+    const parts = [];
+    if (five != null) parts.push(`5h 剩 ${Math.max(0, Math.round(100 - five))}%`);
+    if (week != null) parts.push(`周 剩 ${Math.max(0, Math.round(100 - week))}%`);
+    return parts.join('  ·  ');
+  } catch (e) { return ''; }
+}
+
 setInterval(() => {
   const now = Date.now();
   if (now - lastActivity > IDLE_MS && now - lastNag >= NAG_EVERY_MS) {
     lastNag = now;
     const text = makeNagText();
-    dbg('NAG', text);
-    deliverSecondary({ scenario: 'idle', banner: text }); // 仅副屏，带横幅
+    const sub = readQuota(); // 横幅下方小字：Claude 5h/周额度剩余
+    dbg('NAG', text, '|', sub);
+    deliverSecondary({ scenario: 'idle', banner: text, sub }); // 仅副屏，带横幅
   }
 }, Number(process.env.FN_CHECK_MS) || 60 * 1000);
 

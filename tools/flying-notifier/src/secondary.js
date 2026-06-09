@@ -98,7 +98,14 @@ function fly(evt) {
   towEl.className = 'sec-banner';
   if (evt.banner) {
     towEl.classList.add('t-nag');
-    towEl.textContent = evt.banner;
+    if (evt.sub) {
+      towEl.classList.add('col');
+      towEl.innerHTML = `<div class="sec-banner-main"></div><div class="sec-banner-sub"></div>`;
+      towEl.querySelector('.sec-banner-main').textContent = evt.banner;
+      towEl.querySelector('.sec-banner-sub').textContent = evt.sub;
+    } else {
+      towEl.textContent = evt.banner;
+    }
     ropeLen = 460;
   } else {
     const typ = TYPE[evt.type] || TYPE.default;
