@@ -123,66 +123,91 @@ function fly(evt) {
     { duration: DUR, easing: 'linear', fill: 'forwards' } // 匀速 → 转弯更顺
   );
 
-  // 每帧：按飞行方向用软绳把 LOGO 挂在机尾；按节奏撒橙色云
+  // 每帧：软绳把横幅挂在机尾随轨迹摆动；飞机出屏后继续拖横幅出屏
   let running = true, prev = null, lastPuff = 0, ropePts = null;
-  function frame(ts) {
-    if (!running) return;
-    const pc = center(planeEl);
-    let tx = pc.x, ty = pc.y; // 机尾尖（绳子/尾焰的起点）
-    if (prev) {
-      let dx = pc.x - prev.x, dy = pc.y - prev.y;
-      const len = Math.hypot(dx, dy) || 1;
-      dx /= len; dy /= len;
-      tx = pc.x - dx * tailOff; ty = pc.y - dy * tailOff; // 沿飞行反方向退到机尾
-      if (towEl) {
-        const seg = ropeLen / ROPE_SEG;
-        if (!ropePts) { // 初始化：沿机尾后方一字排开
-          ropePts = [];
-          for (let i = 0; i <= ROPE_SEG; i++) {
-            const x = tx - dx * seg * i, y = ty - dy * seg * i;
-            ropePts.push({ x, y, px: x, py: y });
-          }
-        }
-        // Verlet 积分：惯性 + 重力（首点钉在机尾）
-        ropePts[0].x = tx; ropePts[0].y = ty; ropePts[0].px = tx; ropePts[0].py = ty;
-        for (let i = 1; i <= ROPE_SEG; i++) {
-          const p = ropePts[i];
-          const vx = (p.x - p.px) * ROPE_DAMP, vy = (p.y - p.py) * ROPE_DAMP;
-          p.px = p.x; p.py = p.y;
-          p.x += vx; p.y += vy + ROPE_GRAV; // ROPE_GRAV=0 → 整条绳无重量
-        }
-        // 长度约束（多次松弛收敛），首点保持钉住
-        for (let it = 0; it < 8; it++) {
-          ropePts[0].x = tx; ropePts[0].y = ty;
-          for (let i = 0; i < ROPE_SEG; i++) {
-            const a = ropePts[i], b = ropePts[i + 1];
-            let ddx = b.x - a.x, ddy = b.y - a.y;
-            const dd = Math.hypot(ddx, ddy) || 0.0001;
-            const diff = ((dd - seg) / dd) * 0.5;
-            const ox = ddx * diff, oy = ddy * diff;
-            if (i !== 0) { a.x += ox; a.y += oy; }
-            b.x -= ox; b.y -= oy;
-          }
-        }
-        const end = ropePts[ROPE_SEG]; // 被拖物挂在绳子自由端 → 随之自然摆动
-        towEl.style.left = end.x + 'px';
-        towEl.style.top = end.y + 'px';
-        ropePath.setAttribute('d', smoothPath(ropePts));
+  let exiting = false, vtail = null, exitVel = { x: 0, y: 0 }, lastVel = { x: 1, y: 0 }, exitFrames = 0;
+  const seg = ropeLen / ROPE_SEG;
+
+  function stepRope(tx, ty) {
+    if (!ropePts) {
+      const l = Math.hypot(lastVel.x, lastVel.y) || 1;
+      ropePts = [];
+      for (let i = 0; i <= ROPE_SEG; i++) {
+        const x = tx - (lastVel.x / l) * seg * i, y = ty - (lastVel.y / l) * seg * i;
+        ropePts.push({ x, y, px: x, py: y });
       }
     }
-    prev = pc;
-    if (ts - lastPuff > PUFF_MS) { lastPuff = ts; spawnPuff(tx, ty); } // 尾焰从机尾喷
-    requestAnimationFrame(frame);
+    ropePts[0].x = tx; ropePts[0].y = ty; ropePts[0].px = tx; ropePts[0].py = ty;
+    for (let i = 1; i <= ROPE_SEG; i++) {
+      const p = ropePts[i];
+      const vx = (p.x - p.px) * ROPE_DAMP, vy = (p.y - p.py) * ROPE_DAMP;
+      p.px = p.x; p.py = p.y;
+      p.x += vx; p.y += vy + ROPE_GRAV;
+    }
+    for (let it = 0; it < 8; it++) {
+      ropePts[0].x = tx; ropePts[0].y = ty;
+      for (let i = 0; i < ROPE_SEG; i++) {
+        const a = ropePts[i], b = ropePts[i + 1];
+        let ddx = b.x - a.x, ddy = b.y - a.y;
+        const dd = Math.hypot(ddx, ddy) || 0.0001;
+        const diff = ((dd - seg) / dd) * 0.5;
+        const ox = ddx * diff, oy = ddy * diff;
+        if (i !== 0) { a.x += ox; a.y += oy; }
+        b.x -= ox; b.y -= oy;
+      }
+    }
+    const end = ropePts[ROPE_SEG];
+    towEl.style.left = end.x + 'px';
+    towEl.style.top = end.y + 'px';
+    ropePath.setAttribute('d', smoothPath(ropePts));
+    return end;
   }
-  requestAnimationFrame(frame);
 
-  pAnim.onfinish = () => {
+  function cleanup() {
     running = false;
     planeEl.remove();
     if (ropeSvg) ropeSvg.remove();
     if (towEl) towEl.remove();
     active = Math.max(0, active - 1);
-    if (active === 0) setTimeout(() => { if (active === 0) window.fn.secIdle(); }, 2800);
+    if (active === 0) setTimeout(() => { if (active === 0) window.fn.secIdle(); }, 800);
+  }
+
+  function frame(ts) {
+    if (!running) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    if (!exiting) {
+      const pc = center(planeEl);
+      if (prev) {
+        const dx = pc.x - prev.x, dy = pc.y - prev.y;
+        lastVel = { x: dx, y: dy };
+        const len = Math.hypot(dx, dy) || 1;
+        const tx = pc.x - (dx / len) * tailOff, ty = pc.y - (dy / len) * tailOff;
+        stepRope(tx, ty);
+        if (ts - lastPuff > PUFF_MS) { lastPuff = ts; spawnPuff(tx, ty); }
+      }
+      prev = pc;
+    } else {
+      // 拖尾出屏：飞机已飞出，继续沿原速把机尾推向屏外，把横幅也拖出去
+      vtail.x += exitVel.x; vtail.y += exitVel.y;
+      const end = stepRope(vtail.x, vtail.y);
+      exitFrames++;
+      const bw = towEl.offsetWidth, bh = towEl.offsetHeight;
+      const off = (end.x - bw > W) || (end.x < 0) || (end.y - bh / 2 > H) || (end.y + bh / 2 < 0);
+      if (off || exitFrames > 600) { cleanup(); return; }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  pAnim.onfinish = () => {
+    // 飞机走完路径(已出屏) → 进入拖尾出屏阶段，继续把横幅拖出，别提前删
+    const pc = center(planeEl);
+    const l = Math.hypot(lastVel.x, lastVel.y) || 1;
+    const sp = Math.max(8, l); // 出屏速度，至少 8px/帧
+    exitVel = { x: lastVel.x / l * sp, y: lastVel.y / l * sp };
+    vtail = { x: pc.x - lastVel.x / l * tailOff, y: pc.y - lastVel.y / l * tailOff };
+    planeEl.remove(); // 飞机已出屏，先移除；绳+横幅继续拖出
+    exiting = true;
   };
 }
 
